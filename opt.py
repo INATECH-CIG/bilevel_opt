@@ -9,7 +9,16 @@ Created on August, 21th, 2023
 from linopy import Model
 import pandas as pd
 
-def find_optimal_k(gens_df, demand_df, k_max, opt_gen, big_w=10000, print_results=False):
+
+def find_optimal_k(
+    gens_df,
+    k_values_df,
+    demand_df,
+    k_max,
+    opt_gen,
+    big_w=10000,
+    print_results=False,
+):
     model = Model()
 
     time = pd.Index(range(len(demand_df)), name="time")
@@ -27,7 +36,7 @@ def find_optimal_k(gens_df, demand_df, k_max, opt_gen, big_w=10000, print_result
         lower=0, coords=[gens, time], name="shut-down"
     )  # shut-down costs in EUR/h
     k = model.add_variables(
-        lower=1, upper=k_max, name="strategy"
+        lower=1, upper=k_max, coords=[time], name="strategy"
     )  # strategic bidding parameter
     lambda_ = model.add_variables(
         lower=-500, upper=3000, coords=[time], name="market price"
@@ -86,7 +95,7 @@ def find_optimal_k(gens_df, demand_df, k_max, opt_gen, big_w=10000, print_result
             )
             if gen == opt_gen
             else (
-                gens_df.at[gen, "bid"] * g.loc[gen, :]
+                (k_values_df[gen] * gens_df.at[gen, "mc"]).to_list() * g.loc[gen, :]
                 + gens_df.at[gen, "f"] * u.loc[gen, :]
                 + c_up.loc[gen, :]
                 + c_down.loc[gen, :]
@@ -100,24 +109,13 @@ def find_optimal_k(gens_df, demand_df, k_max, opt_gen, big_w=10000, print_result
     def duality_gap_part_2_rule(model):
         expr = (nu_max * demand_df.loc[:, "volume"].values).sum()
 
-        expr += sum(
-            pi_u.loc[i, :] * gens_df.at[i, "r_up"]
-            for i in gens
-        ).sum()
+        expr += sum(pi_u.loc[i, :] * gens_df.at[i, "r_up"] for i in gens).sum()
 
-        expr += sum(pi_d.loc[i, :] * gens_df.at[i, "r_down"]
-            for i in gens
-        ).sum()
+        expr += sum(pi_d.loc[i, :] * gens_df.at[i, "r_down"] for i in gens).sum()
 
-        expr += sum(
-            pi_u.loc[i, 0] * gens_df.at[i, "g_0"]
-            for i in gens
-        )
+        expr += sum(pi_u.loc[i, 0] * gens_df.at[i, "g_0"] for i in gens)
 
-        expr -= sum(
-            pi_d.loc[i, 0] * gens_df.at[i, "g_0"]
-            for i in gens
-        )
+        expr -= sum(pi_d.loc[i, 0] * gens_df.at[i, "g_0"] for i in gens)
 
         expr += sum(
             sigma_u.loc[i, 1:] * gens_df.at[i, "k_up"] * gens_df.at[i, "u_0"]
@@ -216,7 +214,7 @@ def find_optimal_k(gens_df, demand_df, k_max, opt_gen, big_w=10000, print_result
         if t != time[-1]:
             return (
                 (
-                    k[i] * gens_df.at[i, "mc"]
+                    k[t] * gens_df.at[i, "mc"]
                     - lambda_[t]
                     + mu_max[i, t]
                     - zeta_min[i, t]
@@ -235,12 +233,12 @@ def find_optimal_k(gens_df, demand_df, k_max, opt_gen, big_w=10000, print_result
                     - pi_u[i, t + 1]
                     - pi_d[i, t]
                     + pi_d[i, t + 1]
-                    >= -gens_df.at[i, "bid"]
+                    >= -k_values_df[i].at[t] * gens_df.at[i, "mc"]
                 )
             )
         if i == opt_gen:
             return (
-                k[i] * gens_df.at[i, "mc"]
+                k[t] * gens_df.at[i, "mc"]
                 - lambda_[t]
                 + mu_max[i, t]
                 - zeta_min[i, t]
@@ -250,10 +248,8 @@ def find_optimal_k(gens_df, demand_df, k_max, opt_gen, big_w=10000, print_result
             )
         else:
             return (
-                -lambda_[t]
-                + mu_max[i, t]
-                - zeta_min[i, t] + pi_u[i, t] - pi_d[i, t]
-                >= -gens_df.at[i, "bid"]
+                -lambda_[t] + mu_max[i, t] - zeta_min[i, t] + pi_u[i, t] - pi_d[i, t]
+                >= -k_values_df[i].at[t] * gens_df.at[i, "mc"]
             )
 
     gen_dual_constr = model.add_constraints(
@@ -295,33 +291,48 @@ def find_optimal_k(gens_df, demand_df, k_max, opt_gen, big_w=10000, print_result
     )
 
     model.solve(
-        solver_name="gurobi", NonConvex=2, LogToConsole=print_results, log_fn="logs/solver.log"
+        solver_name="gurobi",
+        NonConvex=2,
+        LogToConsole=print_results,
+        TimeLimit=30,
+        log_fn="logs/solver.log",
     )
 
     generation = pd.DataFrame(
         columns=[f"gen_{gen}" for gen in gens], index=time, data=g.solution.T
-    ).round(1)
-    demand = pd.DataFrame(columns=["demand"], index=time, data=d.solution).round(1)
+    ).round(3)
+    demand = pd.DataFrame(columns=["demand"], index=time, data=d.solution).round(3)
     mcp = pd.DataFrame(columns=["price"], index=time, data=lambda_.solution).round(3)
     main_df = pd.concat([generation, demand, mcp], axis=1)
     supp_df = model.solution.to_dataframe()
 
     return main_df, supp_df, k.solution.values
 
+
 # %%
 if __name__ == "__main__":
+    big_w = 10000  # weight for duality gap objective
+    k_max = 2  # maximum multiplier for strategic bidding
+
+    start = pd.to_datetime("2019-03-01 00:00")
+    end = pd.to_datetime("2019-03-01 12:00")
+
     # generators
     gens_df = pd.read_csv("inputs/gens.csv", index_col=0)
 
     # 24 hours of demand first increasing and then decreasing
     demand_df = pd.read_csv("inputs/demand.csv", index_col=0)
+    demand_df.index = pd.to_datetime(demand_df.index)
+    demand_df = demand_df.loc[start:end]
+    # reset index to start at 0
+    demand_df = demand_df.reset_index(drop=True)
 
-    big_w = 10000  # weight for duality gap objective
-    k_max = 2  # maximum multiplier for strategic bidding
-    opt_gen = 1  # generator that is allowed to bid strategically
+    k_values_df = pd.DataFrame(columns=gens_df.index, index=demand_df.index, data=1.0)
+    opt_gen = 3  # generator that is allowed to bid strategically
 
     main_df, supp_df, k = find_optimal_k(
         gens_df=gens_df,
+        k_values_df=k_values_df,
         demand_df=demand_df,
         k_max=k_max,
         opt_gen=opt_gen,
@@ -330,5 +341,7 @@ if __name__ == "__main__":
     )
 
     print(main_df)
+
+    # %%
 
 # %%
