@@ -12,7 +12,7 @@ import pandas as pd
 
 
 # %%
-def uc_problem(gens_df, demand_df, k_df, u_fixed=None):
+def uc_problem(gens_df, demand_df, k_values_df, u_fixed=None):
     model = Model()
 
     time = pd.Index(range(len(demand_df)), name="time")
@@ -42,7 +42,7 @@ def uc_problem(gens_df, demand_df, k_df, u_fixed=None):
     # primary problem objective
     def primary_objective_rule(model):
         expr = sum(
-            k_df.at[gen, "k"] * gens_df.at[gen, "mc"] * g.loc[gen, :]
+            (k_values_df[gen] * gens_df.at[gen, "mc"]).to_list() * g.loc[gen, :]
             + gens_df.at[gen, "f"] * u.loc[gen, :]
             + c_up.loc[gen, :]
             + c_down.loc[gen, :]
@@ -83,9 +83,9 @@ def uc_problem(gens_df, demand_df, k_df, u_fixed=None):
         else:
             return g[i, t] - g[i, t - 1] <= gens_df.at[i, "r_up"]
 
-    # ramp_up_constr = model.add_constraints(
-    #     ramp_up_rule, coords=[gens, time], name="ramp_up"
-    # )
+    ramp_up_constr = model.add_constraints(
+        ramp_up_rule, coords=[gens, time], name="ramp_up"
+    )
 
     # ramp down constraint
     def ramp_down_rule(model, i, t):
@@ -96,9 +96,9 @@ def uc_problem(gens_df, demand_df, k_df, u_fixed=None):
         else:
             return g[i, t - 1] - g[i, t] <= gens_df.at[i, "r_down"]
 
-    # ramp_down_constr = model.add_constraints(
-    #     ramp_down_rule, coords=[gens, time], name="ramp_down"
-    # )
+    ramp_down_constr = model.add_constraints(
+        ramp_down_rule, coords=[gens, time], name="ramp_down"
+    )
 
     # start up cost constraint
     def start_up_rule(model, i, t):
@@ -128,40 +128,62 @@ def uc_problem(gens_df, demand_df, k_df, u_fixed=None):
         shut_down_rule, coords=[gens, time], name="shut_down"
     )
 
-    model.solve(solver_name="gurobi")
-    sol = model.solution.to_dataframe()
+    model.solve(solver_name="gurobi", LogToConsole=False)
 
-    try:
-        prices = balance_constr.dual
-    except AttributeError:
-        prices = None
+    if u_fixed is not None:
+        prices = -balance_constr.dual
+        generation = pd.DataFrame(
+            columns=[f"gen_{gen}" for gen in gens], index=time, data=g.solution.T
+        ).round(3)
+        demand = pd.DataFrame(columns=["demand"], index=time, data=d.solution).round(3)
+        mcp = pd.DataFrame(columns=["price"], index=time, data=prices.values).round(3)
+        main_df = pd.concat([generation, demand, mcp], axis=1)
+        supp_df = model.solution.to_dataframe()
 
-    return sol, u.solution, prices
+        return main_df, supp_df
+
+    else:
+        return u.solution
+
+
+def solve_and_get_prices(gens_df, demand_df, k_values_df):
+    # solve once to get status u
+    u_init = uc_problem(
+        gens_df=gens_df,
+        demand_df=demand_df,
+        k_values_df=k_values_df,
+    )
+    # solve again with status u
+    main_df, supp_df = uc_problem(
+        gens_df=gens_df,
+        demand_df=demand_df,
+        k_values_df=k_values_df,
+        u_fixed=u_init.values,
+    )
+
+    return main_df, supp_df
 
 
 # %%
 if __name__ == "__main__":
+    start = pd.to_datetime("2019-03-01 00:00")
+    end = pd.to_datetime("2019-03-02 00:00")
+
     # generators
     gens_df = pd.read_csv("inputs/gens.csv", index_col=0)
 
     # 24 hours of demand first increasing and then decreasing
     demand_df = pd.read_csv("inputs/demand.csv", index_col=0)
+    demand_df.index = pd.to_datetime(demand_df.index)
+    demand_df = demand_df.loc[start:end]
 
-    k_df = pd.DataFrame(columns=["k"], index=gens_df.index, data=1)
+    # reset index to start at 0
+    demand_df = demand_df.reset_index(drop=True)
 
-    # solve once to get status u
-    sol, u, prices = uc_problem(
-        gens_df=gens_df,
-        demand_df=demand_df,
-        k_df=k_df,
-    )
+    k_values_df = pd.read_csv("outputs/k_values_df.csv", index_col=0)
+    k_values_df.columns = k_values_df.columns.astype(int)
 
-    # solve again with status u
-    sol, u, prices = uc_problem(
-        gens_df=gens_df,
-        demand_df=demand_df,
-        k_df=k_df,
-        u_fixed=u.values,
-    )
+    # %%
+    main_df, supp_df = solve_and_get_prices(gens_df, demand_df, k_values_df)
 
 # %%

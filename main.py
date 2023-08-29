@@ -10,6 +10,7 @@ Created on August, 21th, 2023
 import pandas as pd
 
 from opt import find_optimal_k
+from uc_problem import solve_and_get_prices
 
 # %%
 if __name__ == "__main__":
@@ -25,7 +26,6 @@ if __name__ == "__main__":
     # 24 hours of demand first increasing and then decreasing
     demand_df = pd.read_csv("inputs/demand.csv", index_col=0)
     demand_df.index = pd.to_datetime(demand_df.index)
-
     demand_df = demand_df.loc[start:end]
     # reset index to start at 0
     demand_df = demand_df.reset_index(drop=True)
@@ -72,3 +72,17 @@ if __name__ == "__main__":
     k_values_df.to_csv("outputs/k_values_df.csv")
 
     # %%
+    # get true prices and profiles
+    true_main_df, true_supp_df = solve_and_get_prices(gens_df, demand_df, k_values_df)
+
+    # %%
+    # get potential profits as difference between prices and marginal costs multiplied by generation
+    # and subtracting the startup and shutdown costs
+
+    profits = pd.DataFrame(index=main_df.index, columns=gens_df.index)
+    for gen in gens_df.index:
+        profits[gen] = (
+            main_df[f"gen_{gen}"] * (main_df['price'] - gens_df.at[gen, "mc"]
+            - gens_df.loc[gen, "startup_cost"] * true_supp_df[f"startup_{gen}"]
+            - gens_df.loc[gen, "shutdown_cost"] * true_supp_df[f"shutdown_{gen}"]
+        ))
