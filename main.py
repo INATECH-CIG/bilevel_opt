@@ -10,6 +10,8 @@ Created on August, 21th, 2023
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
+import os
+
 
 from opt import find_optimal_k
 from uc_problem import solve_and_get_prices
@@ -17,18 +19,19 @@ from utils import calculate_profits
 
 # %% load data and define parameters
 if __name__ == "__main__":
-    solve_diagonalization = True
+    solve_diagonalization = False
     big_w = 10000  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
 
+    case = "Case_1"
     start = pd.to_datetime("2019-03-01 00:00")
     end = pd.to_datetime("2019-03-02 00:00")
 
     # generators
-    gens_df = pd.read_csv("inputs/gens.csv", index_col=0)
+    gens_df = pd.read_csv(f"inputs/{case}/gens.csv", index_col=0)
 
     # 24 hours of demand first increasing and then decreasing
-    demand_df = pd.read_csv("inputs/demand.csv", index_col=0)
+    demand_df = pd.read_csv(f"inputs/{case}/demand.csv", index_col=0)
     demand_df.index = pd.to_datetime(demand_df.index)
     demand_df = demand_df.loc[start:end]
     # reset index to start at 0
@@ -45,7 +48,7 @@ if __name__ == "__main__":
             last_k_values = k_values_df.copy()
             last_profit_values = profit_values.copy()
 
-            for opt_gen in gens_df.index:
+            for opt_gen in gens_df:
                 print(f"Optimizing for generator {opt_gen}")
                 main_df, supp_df, k = find_optimal_k(
                     gens_df=gens_df,
@@ -89,14 +92,20 @@ if __name__ == "__main__":
         print("Final bidding decisions:")
         print(k_values_df)
 
-        main_df.to_csv("outputs/approx_main_df.csv")
-        supp_df.to_csv("outputs/approx_supp_df.csv")
-        k_values_df.to_csv("outputs/k_values_df.csv")
+        # make sure output folder exists
+        if not os.path.exists(f"outputs/{case}"):
+            os.makedirs(f"outputs/{case}")
+
+        main_df.to_csv(f"outputs/{case}/approx_main_df.csv")
+        supp_df.to_csv(f"outputs/{case}/approx_supp_df.csv")
+        k_values_df.to_csv(f"outputs/{case}/k_values_df.csv")
 
     # %% load previously saved results
-    approx_main_df = pd.read_csv("outputs/approx_main_df.csv", index_col=0)
-    approx_supp_df = pd.read_csv("outputs/approx_supp_df.csv")
-    k_values_after_convergence = pd.read_csv("outputs/k_values_df.csv", index_col=0)
+    approx_main_df = pd.read_csv(f"outputs/{case}/approx_main_df.csv", index_col=0)
+    approx_supp_df = pd.read_csv(f"outputs/{case}/approx_supp_df.csv")
+    k_values_after_convergence = pd.read_csv(
+        f"outputs/{case}/k_values_df.csv", index_col=0
+    )
     k_values_after_convergence.columns = k_values_after_convergence.columns.astype(int)
 
     # get true prices and profiles
@@ -152,7 +161,7 @@ if __name__ == "__main__":
     autolabel(rects2)
 
     fig.tight_layout()
-
+    plt.savefig(f"outputs/{case}/profits.png")
     plt.show()
 
     # plot true and approximate prices
@@ -163,5 +172,40 @@ if __name__ == "__main__":
     ax.set_ylabel("Price in EUR/MWh")
     ax.set_xlabel("Time")
     ax.legend()
+    plt.savefig(f"outputs/{case}/prices.png")
     plt.show()
+    # %% execute for a single agent
+    opt_gen = 2
+    print()
+    last_k_values = k_values_df.copy()
+    last_profit_values = profit_values.copy()
+
+    print(f"Optimizing for generator {opt_gen}")
+    main_df, supp_df, k = find_optimal_k(
+        gens_df=gens_df,
+        k_values_df=k_values_df,
+        demand_df=demand_df,
+        k_max=k_max,
+        opt_gen=opt_gen,
+        big_w=big_w,
+    )
+
+    k_values_df[opt_gen] = k
+    profit_values[opt_gen] = calculate_profits(main_df, supp_df, gens_df)[opt_gen]
+
+    print()
+    print("Final results:")
+    print(main_df)
+    print()
+    print("Final bidding decisions:")
+    print(k_values_df)
+
+    # make sure output folder exists
+    if not os.path.exists(f"outputs/{case}"):
+        os.makedirs(f"outputs/{case}")
+
+    main_df.to_csv(f"outputs/{case}/approx_main_df.csv")
+    supp_df.to_csv(f"outputs/{case}/approx_supp_df.csv")
+    k_values_df.to_csv(f"outputs/{case}/k_values_df.csv")
+
 # %%
