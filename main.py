@@ -23,7 +23,7 @@ if __name__ == "__main__":
     big_w = 10000  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
 
-    case = "Case_1"
+    case = "Case_2"
     start = pd.to_datetime("2019-03-01 00:00")
     end = pd.to_datetime("2019-03-02 00:00")
 
@@ -48,7 +48,7 @@ if __name__ == "__main__":
             last_k_values = k_values_df.copy()
             last_profit_values = profit_values.copy()
 
-            for opt_gen in gens_df:
+            for opt_gen in gens_df.index:
                 print(f"Optimizing for generator {opt_gen}")
                 main_df, supp_df, k = find_optimal_k(
                     gens_df=gens_df,
