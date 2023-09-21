@@ -4,10 +4,10 @@ Created by: Nick Harder (nick.harder94@gmail.com)
 Created on August, 21th, 2023
 
 """
+import pandas as pd
 # %%
 # Imports
 from linopy import Model
-import pandas as pd
 
 
 def find_optimal_k(

@@ -5,10 +5,10 @@ Created on August, 21th, 2023
 
 """
 
+import pandas as pd
 # %%
 # Imports
 from linopy import Model
-import pandas as pd
 
 
 # %%

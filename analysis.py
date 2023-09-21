@@ -1,10 +1,11 @@
 # %%
-import pandas as pd
+import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import plotly.express as px
+
 from uc_problem import solve_and_get_prices
 from utils import calculate_profits
-import matplotlib.pyplot as plt
 
 # %%
 case = "Case_2"

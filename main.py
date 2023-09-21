@@ -5,12 +5,13 @@ Created on August, 21th, 2023
 
 """
 
+import os
+
+import matplotlib.pyplot as plt
+import numpy as np
 # %%
 # Imports
 import pandas as pd
-import matplotlib.pyplot as plt
-import numpy as np
-import os
 
 from model_1 import find_optimal_k_method_1 as find_optimal_k
 from uc_problem import solve_and_get_prices

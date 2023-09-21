@@ -4,7 +4,7 @@ import pyomo.environ as pyo
 from pyomo.opt import SolverFactory
 
 
-def find_optimal_k_method_1(
+def find_optimal_k_method_2(
     gens_df,
     k_values_df,
     demand_df,
@@ -41,10 +41,22 @@ def find_optimal_k_method_1(
 
     model.psi_max = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
 
+    # duals of LP relaxation
+    model.lambda_hat = pyo.Var(model.time, within=pyo.Reals, bounds=(-500, 3000))
+    model.mu_max_hat = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
+    model.nu_max_hat = pyo.Var(model.time, within=pyo.NonNegativeReals)
+    model.zeta_min_hat = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
+
+    model.pi_u_hat = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
+    model.pi_d_hat = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
+
+    model.sigma_u_hat = pyo.Var(model.gens, model.time, bounds=(0, 1))
+    model.sigma_d_hat = pyo.Var(model.gens, model.time, bounds=(0, 1))
+
     # objective rules
     def primary_objective_rule(model):
         return sum(
-            model.lambda_[t] * model.g[opt_gen, t]
+            model.lambda_hat[t] * model.g[opt_gen, t]
             - gens_df.at[opt_gen, "mc"] * model.g[opt_gen, t]
             - model.c_up[opt_gen, t]
             - model.c_down[opt_gen, t]
@@ -268,6 +280,160 @@ def find_optimal_k_method_1(
 
     model.demand_dual = pyo.Constraint(model.time, rule=demand_dual_rule)
 
+    # KKT condition from LP relaxation
+    def kkt_gen_dual_rule(model, i, t):
+        if t != model.time.at(-1):
+            return (
+                (
+                    model.k[t] * gens_df.at[i, "mc"]
+                    - model.lambda_hat[t]
+                    + model.mu_max_hat[i, t]
+                    - model.zeta_min_hat[i, t]
+                    + model.pi_u_hat[i, t]
+                    - model.pi_u_hat[i, t + 1]
+                    - model.pi_d_hat[i, t]
+                    + model.pi_d_hat[i, t + 1]
+                    == 0
+                )
+                if i == opt_gen
+                else (
+                    -model.lambda_hat[t]
+                    + model.mu_max_hat[i, t]
+                    - model.zeta_min_hat[i, t]
+                    + model.pi_u_hat[i, t]
+                    - model.pi_u_hat[i, t + 1]
+                    - model.pi_d_hat[i, t]
+                    + model.pi_d_hat[i, t + 1]
+                    >= -k_values_df.at[t, i] * gens_df.at[i, "mc"]
+                )
+            )
+        if i == opt_gen:
+            return (
+                model.k[t] * gens_df.at[i, "mc"]
+                - model.lambda_hat[t]
+                + model.mu_max_hat[i, t]
+                - model.zeta_min_hat[i, t]
+                + model.pi_u_hat[i, t]
+                - model.pi_d_hat[i, t]
+                >= 0
+            )
+        else:
+            return (
+                -model.lambda_hat[t]
+                + model.mu_max_hat[i, t]
+                - model.zeta_min_hat[i, t]
+                + model.pi_u_hat[i, t]
+                - model.pi_d_hat[i, t]
+                >= -k_values_df.at[t, i] * gens_df.at[i, "mc"]
+            )
+
+    model.gen_dual_kkt = pyo.Constraint(model.gens, model.time, rule=kkt_gen_dual_rule)
+
+    def kkt_demand_rule(model, t):
+        return model.lambda_hat[t] + model.nu_max_hat[t] - demand_df.at[t, "price"] == 0
+
+    model.demand_dual_kkt = pyo.Constraint(model.time, rule=kkt_demand_rule)
+
+    # complementary slackness
+    def g_max_cs_rule(model, i, t):
+        return (
+            model.mu_max_hat[i, t]
+            * (model.g[i, t] - gens_df.at[i, "g_max"] * model.u[i, t])
+            == 0
+        )
+
+    model.g_max_cs = pyo.Constraint(model.gens, model.time, rule=g_max_cs_rule)
+
+    def g_min_cs_rule(model, i, t):
+        return (
+            model.zeta_min_hat[i, t]
+            * (gens_df.at[i, "g_min"] * model.u[i, t] - model.g[i, t])
+            == 0
+        )
+
+    model.g_min_cs = pyo.Constraint(model.gens, model.time, rule=g_min_cs_rule)
+
+    def d_max_cs_rule(model, t):
+        return model.nu_max_hat[t] * (model.d[t] - demand_df.at[t, "volume"]) == 0
+
+    model.d_max_cs = pyo.Constraint(model.time, rule=d_max_cs_rule)
+
+    def start_up_cs_rule(model, i, t):
+        if t == 0:
+            return (
+                model.sigma_u_hat[i, t]
+                * (
+                    model.c_up[i, t]
+                    - (model.u[i, t] - gens_df.at[i, "u_0"]) * gens_df.at[i, "k_up"]
+                )
+                == 0
+            )
+        else:
+            return (
+                model.sigma_u_hat[i, t]
+                * (
+                    model.c_up[i, t]
+                    - (model.u[i, t] - model.u[i, t - 1]) * gens_df.at[i, "k_up"]
+                )
+                == 0
+            )
+
+    model.start_up_cs = pyo.Constraint(model.gens, model.time, rule=start_up_cs_rule)
+
+    def shut_down_cs_rule(model, i, t):
+        if t == 0:
+            return (
+                model.sigma_d_hat[i, t]
+                * (
+                    model.c_down[i, t]
+                    - (gens_df.at[i, "u_0"] - model.u[i, t]) * gens_df.at[i, "k_down"]
+                )
+                == 0
+            )
+        else:
+            return (
+                model.sigma_d_hat[i, t]
+                * (
+                    model.c_down[i, t]
+                    - (model.u[i, t - 1] - model.u[i, t]) * gens_df.at[i, "k_down"]
+                )
+                == 0
+            )
+
+    model.shut_down_cs = pyo.Constraint(model.gens, model.time, rule=shut_down_cs_rule)
+
+    def ru_max_cs_rule(model, i, t):
+        if t == 0:
+            return (
+                model.pi_u_hat[i, t]
+                * (model.g[i, t] - gens_df.at[i, "g_0"] - gens_df.at[i, "r_up"])
+                == 0
+            )
+        else:
+            return (
+                model.pi_u_hat[i, t]
+                * (model.g[i, t] - model.g[i, t - 1] - gens_df.at[i, "r_up"])
+                == 0
+            )
+
+    model.ru_max_cs = pyo.Constraint(model.gens, model.time, rule=ru_max_cs_rule)
+
+    def rd_max_cs_rule(model, i, t):
+        if t == 0:
+            return (
+                model.pi_d_hat[i, t]
+                * (gens_df.at[i, "g_0"] - model.g[i, t] - gens_df.at[i, "r_down"])
+                == 0
+            )
+        else:
+            return (
+                model.pi_d_hat[i, t]
+                * (model.g[i, t - 1] - model.g[i, t] - gens_df.at[i, "r_down"])
+                == 0
+            )
+
+    model.rd_max_cs = pyo.Constraint(model.gens, model.time, rule=rd_max_cs_rule)
+
     # solve
     instance = model.create_instance()
 
@@ -280,10 +446,12 @@ def find_optimal_k_method_1(
     if results.solver.termination_condition == pyo.TerminationCondition.maxTimeLimit:
         print("Solver did not converge to an optimal solution")
 
-    generation_df = pd.DataFrame(index=demand_df.index, columns=gens_df.index)
+    generation_df = pd.DataFrame(
+        index=demand_df.index, columns=[f"Gen_{gen}" for gen in gens_df.index]
+    )
     for gen in gens_df.index:
         for t in demand_df.index:
-            generation_df.at[t, gen] = instance.g[gen, t].value
+            generation_df.at[t, f"Gen_{gen}"] = instance.g[gen, t].value
 
     demand_df = pd.DataFrame(index=demand_df.index, columns=["demand"])
     for t in demand_df.index:
@@ -293,7 +461,11 @@ def find_optimal_k_method_1(
     for t in demand_df.index:
         mcp.at[t, "mcp"] = instance.lambda_[t].value
 
-    main_df = pd.concat([generation_df, demand_df, mcp], axis=1)
+    mcp_hat = pd.DataFrame(index=demand_df.index, columns=["mcp_hat"])
+    for t in demand_df.index:
+        mcp_hat.at[t, "mcp_hat"] = instance.lambda_hat[t].value
+
+    main_df = pd.concat([generation_df, demand_df, mcp, mcp_hat], axis=1)
 
     k_values = pd.DataFrame(index=demand_df.index, columns=["k"])
     for t in demand_df.index:
@@ -325,7 +497,7 @@ if __name__ == "__main__":
     k_values_df = pd.DataFrame(columns=gens_df.index, index=demand_df.index, data=1.0)
     opt_gen = 1  # generator that is allowed to bid strategically
 
-    instance, main_df, k_values = find_optimal_k_method_1(
+    instance, main_df, k_values = find_optimal_k_method_2(
         gens_df=gens_df,
         k_values_df=k_values_df,
         demand_df=demand_df,
@@ -336,6 +508,7 @@ if __name__ == "__main__":
     )
 
     print(main_df)
+    print()
     print(k_values)
 
 # %%
