@@ -12,8 +12,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 
-
-from opt import find_optimal_k
+from model_1 import find_optimal_k_method_1 as find_optimal_k
 from uc_problem import solve_and_get_prices
 from utils import calculate_profits
 

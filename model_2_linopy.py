@@ -73,10 +73,44 @@ def find_optimal_k(
         lower=0, coords=[gens, time], name="psi_max"
     )  # dual of k_max constraint
 
+    # duals of LP reformulated constraints
+    lambda_hat = model.add_variables(
+        lower=-500, upper=3000, coords=[time], name="lambda_hat"
+    )  # dual of energy balance constraint
+
+    mu_max_hat = model.add_variables(
+        lower=0, coords=[gens, time], name="mu_max_hat"
+    )  # dual of P_max for generation constraint
+
+    nu_min_hat = model.add_variables(
+        lower=0, coords=[time], name="nu_min_hat"
+    )  # dual of P_min for demand constraint
+    nu_max_hat = model.add_variables(
+        lower=0, coords=[time], name="nu_max_hat"
+    )  # dual of P_max for demand constraint
+
+    zeta_min_hat = model.add_variables(
+        lower=0, coords=[gens, time], name="zeta_min_hat"
+    )  # dual of P_min for generation constraint
+
+    pi_u_hat = model.add_variables(
+        lower=0, coords=[gens, time], name="pi_u_hat"
+    )  # dual of ramping up constraint
+    pi_d_hat = model.add_variables(
+        lower=0, coords=[gens, time], name="pi_d_hat"
+    )  # dual of ramping down constraint
+
+    sigma_u_hat = model.add_variables(
+        lower=0, coords=[gens, time], name="sigma_u_hat"
+    )  # dual of start-up constraint
+    sigma_d_hat = model.add_variables(
+        lower=0, coords=[gens, time], name="sigma_d_hat"
+    )  # dual of shut-down constraint
+
     # primary problem objective
     def primary_objective_rule(model):
         expr = (
-            lambda_ * g.loc[opt_gen, :]
+            lambda_hat * g.loc[opt_gen, :]
             - gens_df.at[opt_gen, "mc"] * g.loc[opt_gen, :]
             - c_up.loc[opt_gen, :]
             - c_down.loc[opt_gen, :]
@@ -290,6 +324,166 @@ def find_optimal_k(
         demand_dual_rule, coords=[time], name="demand_dual"
     )
 
+    def lp_gen_dual_rule(model, i, t):
+        if t != time[-1]:
+            return (
+                (
+                    k[t] * gens_df.at[i, "mc"]
+                    - lambda_hat[t]
+                    + mu_max_hat[i, t]
+                    - zeta_min_hat[i, t]
+                    + pi_u_hat[i, t]
+                    - pi_u_hat[i, t + 1]
+                    - pi_d_hat[i, t]
+                    + pi_d_hat[i, t + 1]
+                    == 0
+                )
+                if i == opt_gen
+                else (
+                    -lambda_hat[t]
+                    + mu_max_hat[i, t]
+                    - zeta_min_hat[i, t]
+                    + pi_u_hat[i, t]
+                    - pi_u_hat[i, t + 1]
+                    - pi_d_hat[i, t]
+                    + pi_d_hat[i, t + 1]
+                    == -k_values_df[i].at[t] * gens_df.at[i, "mc"]
+                )
+            )
+        if i == opt_gen:
+            return (
+                k[t] * gens_df.at[i, "mc"]
+                - lambda_hat[t]
+                + mu_max_hat[i, t]
+                - zeta_min_hat[i, t]
+                + pi_u_hat[i, t]
+                - pi_d_hat[i, t]
+                == 0
+            )
+        else:
+            return (
+                -lambda_hat[t]
+                + mu_max_hat[i, t]
+                - zeta_min_hat[i, t]
+                + pi_u_hat[i, t]
+                - pi_d_hat[i, t]
+                == -k_values_df[i].at[t] * gens_df.at[i, "mc"]
+            )
+
+    lp_gen_dual_constr = model.add_constraints(
+        lp_gen_dual_rule, coords=[gens, time], name="lp_gen_dual"
+    )
+
+    def lp_demand_dual_rule(model, t):
+        return lambda_hat[t] - nu_min_hat[t] + nu_max_hat[t] == demand_df.at[t, "price"]
+
+    lp_demand_dual_constr = model.add_constraints(
+        lp_demand_dual_rule, coords=[time], name="lp_demand_dual"
+    )
+
+    lp_start_up_dual_constr = model.add_constraints(
+        sigma_u_hat <= 1, name="lp_start_up_dual"
+    )
+    lp_shut_down_dual_constr = model.add_constraints(
+        sigma_d_hat <= 1, name="lp_shut_down_dual"
+    )
+
+    # complementary slackness constraints
+    def lp_g_max_rule(model, i, t):
+        return (
+            mu_max_hat.loc[:, t] * g.loc[:, t]
+            - gens_df.loc[:, "g_max"].values.reshape(-1, 1)
+            * u.loc[:, t]
+            * mu_max_hat.loc[:, t]
+            == 0
+        )
+
+    g_max_cs = model.add_constraints(
+        lp_g_max_rule, coords=[gens, time], name="g_max_cs"
+    )
+
+    # min generation constraint
+    def lp_g_min_rule(model, i, t):
+        return zeta_min_hat[i, t] * (gens_df.at[i, "g_min"] * u[i, t] - g[i, t]) == 0
+
+    g_min_cs = model.add_constraints(
+        lp_g_min_rule, coords=[gens, time], name="g_min_cs"
+    )
+
+    model.add_constraints(
+        nu_max_hat * (d - demand_df.loc[:, "volume"].values) == 0, name="nu_max_cs"
+    )
+    model.add_constraints(nu_min_hat * d == 0, name="nu_min_cs")
+
+    # start up cost constraint
+    def lp_start_up_rule(model, i, t):
+        if t == 0:
+            return (
+                sigma_u_hat
+                * (
+                    c_up[i, t]
+                    - (u[i, t] - gens_df.at[i, "u_0"]) * gens_df.at[i, "k_up"]
+                )
+                == 0
+            )
+        else:
+            return (
+                sigma_u_hat
+                * (c_up[i, t] - (u[i, t] - u[i, t - 1]) * gens_df.at[i, "k_up"])
+                == 0
+            )
+
+    start_up_cs = model.add_constraints(
+        lp_start_up_rule, coords=[gens, time], name="start_up_cs"
+    )
+
+    # shut down cost constraint
+    def lp_shut_down_rule(model, i, t):
+        if t == 0:
+            return (
+                sigma_d_hat
+                * (
+                    c_down[i, t]
+                    - (gens_df.at[i, "u_0"] - u[i, t]) * gens_df.at[i, "k_down"]
+                )
+                == 0
+            )
+        else:
+            return (
+                sigma_d_hat
+                * (c_down[i, t] - (u[i, t - 1] - u[i, t]) * gens_df.at[i, "k_down"])
+                == 0
+            )
+
+    shut_down_cs = model.add_constraints(
+        lp_shut_down_rule, coords=[gens, time], name="shut_down_cs"
+    )
+
+    def lp_ramp_up_rule(model, i, t):
+        if t == 0:
+            return (
+                pi_u_hat * (g[i, t] - gens_df.at[i, "g_0"] - gens_df.at[i, "r_up"]) == 0
+            )
+        else:
+            return pi_u_hat * (g[i, t] - g[i, t - 1] - gens_df.at[i, "r_up"]) == 0
+
+    ramp_up_cs = model.add_constraints(
+        lp_ramp_up_rule, coords=[gens, time], name="ramp_up"
+    )
+
+    def lp_ramp_down_rule(model, i, t):
+        if t == 0:
+            return (
+                pi_d_hat * (gens_df.at[i, "g_0"] - g[i, t] - gens_df.at[i, "r_down"])
+                == 0
+            )
+        else:
+            return pi_d_hat * (g[i, t - 1] - g[i, t] - gens_df.at[i, "r_down"]) == 0
+
+    ramp_down_cs = model.add_constraints(
+        lp_ramp_down_rule, coords=[gens, time], name="ramp_down"
+    )
+
     model.solve(
         solver_name="gurobi",
         NonConvex=2,
@@ -303,7 +497,10 @@ def find_optimal_k(
     ).round(3)
     demand = pd.DataFrame(columns=["demand"], index=time, data=d.solution).round(3)
     mcp = pd.DataFrame(columns=["price"], index=time, data=lambda_.solution).round(3)
-    main_df = pd.concat([generation, demand, mcp], axis=1)
+    mcp_hat = pd.DataFrame(
+        columns=["price_hat"], index=time, data=lambda_hat.solution
+    ).round(3)
+    main_df = pd.concat([generation, demand, mcp, mcp_hat], axis=1)
     supp_df = model.solution.to_dataframe()
 
     return main_df, supp_df, k.solution.values
