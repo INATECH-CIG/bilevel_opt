@@ -11,6 +11,7 @@ def find_optimal_k_method_1(
     k_max,
     opt_gen,
     big_w=10000,
+    time_limit=60,
     print_results=False,
 ):
     model = pyo.ConcreteModel()
@@ -272,18 +273,20 @@ def find_optimal_k_method_1(
     instance = model.create_instance()
 
     solver = SolverFactory("gurobi")
-    options = {"NonConvex": 2, "LogToConsole": print_results, "TimeLimit": 60}
+    options = {"NonConvex": 2, "LogToConsole": print_results, "TimeLimit": time_limit}
 
-    results = solver.solve(instance, options=options)
+    results = solver.solve(instance, options=options, tee=print_results)
 
     # check if solver exited due to time limit
     if results.solver.termination_condition == pyo.TerminationCondition.maxTimeLimit:
         print("Solver did not converge to an optimal solution")
 
-    generation_df = pd.DataFrame(index=demand_df.index, columns=gens_df.index)
+    generation_df = pd.DataFrame(
+        index=demand_df.index, columns=[f"gen_{gen}" for gen in gens_df.index]
+    )
     for gen in gens_df.index:
         for t in demand_df.index:
-            generation_df.at[t, gen] = instance.g[gen, t].value
+            generation_df.at[t, f"gen_{gen}"] = instance.g[gen, t].value
 
     demand_df = pd.DataFrame(index=demand_df.index, columns=["demand"])
     for t in demand_df.index:
@@ -295,11 +298,27 @@ def find_optimal_k_method_1(
 
     main_df = pd.concat([generation_df, demand_df, mcp], axis=1)
 
+    start_up_cost = pd.DataFrame(
+        index=demand_df.index, columns=[f"start_up_{gen}" for gen in gens_df.index]
+    )
+    for gen in gens_df.index:
+        for t in demand_df.index:
+            start_up_cost.at[t, f"start_up_{gen}"] = instance.c_up[gen, t].value
+
+    shut_down_cost = pd.DataFrame(
+        index=demand_df.index, columns=[f"shut_down_{gen}" for gen in gens_df.index]
+    )
+    for gen in gens_df.index:
+        for t in demand_df.index:
+            shut_down_cost.at[t, f"shut_down_{gen}"] = instance.c_down[gen, t].value
+
+    supp_df = pd.concat([start_up_cost, shut_down_cost], axis=1)
+
     k_values = pd.DataFrame(index=demand_df.index, columns=["k"])
     for t in demand_df.index:
         k_values.at[t, "k"] = instance.k[t].value
 
-    return instance, main_df, k_values
+    return main_df, supp_df, k_values
 
 
 # %%
@@ -310,7 +329,7 @@ if __name__ == "__main__":
     k_max = 2  # maximum multiplier for strategic bidding
 
     start = pd.to_datetime("2019-03-01 00:00")
-    end = pd.to_datetime("2019-03-01 12:00")
+    end = pd.to_datetime("2019-03-02 00:00")
 
     # gens
     gens_df = pd.read_csv(f"inputs/{case}/gens.csv", index_col=0)
@@ -323,19 +342,23 @@ if __name__ == "__main__":
     demand_df = demand_df.reset_index(drop=True)
 
     k_values_df = pd.DataFrame(columns=gens_df.index, index=demand_df.index, data=1.0)
-    opt_gen = 1  # generator that is allowed to bid strategically
+    opt_gen = 2  # generator that is allowed to bid strategically
 
-    instance, main_df, k_values = find_optimal_k_method_1(
+    main_df, supp_df, k_values = find_optimal_k_method_1(
         gens_df=gens_df,
         k_values_df=k_values_df,
         demand_df=demand_df,
         k_max=k_max,
         opt_gen=opt_gen,
         big_w=big_w,
+        time_limit=10,
         print_results=True,
     )
 
     print(main_df)
+    print()
+    print(supp_df)
+    print()
     print(k_values)
 
 # %%
