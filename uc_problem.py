@@ -13,7 +13,7 @@ from pyomo.opt import SolverFactory
 
 
 # %%
-def uc_problem(gens_df, demand_df, k_values_df):
+def solve_uc_problem(gens_df, demand_df, k_values_df):
     model = pyo.ConcreteModel()
 
     # sets
@@ -198,8 +198,3 @@ if __name__ == "__main__":
 
     k_values_df = pd.read_csv("outputs/k_values_df.csv", index_col=0)
     k_values_df.columns = k_values_df.columns.astype(int)
-
-    # %%
-    main_df, supp_df = solve_and_get_prices(gens_df, demand_df, k_values_df)
-
-# %%
