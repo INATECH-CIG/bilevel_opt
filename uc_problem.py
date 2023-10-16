@@ -6,6 +6,7 @@ Created on August, 21th, 2023
 """
 
 import pandas as pd
+
 # %%
 # Imports
 import pyomo.environ as pyo
