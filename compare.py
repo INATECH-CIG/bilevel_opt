@@ -12,10 +12,11 @@ from utils import calculate_profits, calculate_uplift
 # %%
 if __name__ == "__main__":
     case = "Case_1"
+    opt_gen = 3  # generator that is allowed to bid strategically
 
-    big_w = 100000  # weight for duality gap objective
+    big_w = 10000  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
-    time_limit = 30  # time limit in seconds for each optimization
+    time_limit = 60  # time limit in seconds for each optimization
 
     start = pd.to_datetime("2019-03-02 00:00")
     end = pd.to_datetime("2019-03-03 00:00")
@@ -31,13 +32,13 @@ if __name__ == "__main__":
     demand_df = demand_df.reset_index(drop=True)
 
     k_values_df = pd.DataFrame(columns=gens_df.index, index=demand_df.index, data=1.0)
-    opt_gen = 1  # generator that is allowed to bid strategically
 
     print_results = False
-    optimize = False
+    optimize = True
 
     # %%
     if optimize:
+        print("Solving using Method 1")
         main_df_1, supp_df_1, k_values_1 = method_1(
             gens_df=gens_df,
             k_values_df=k_values_df,
@@ -61,6 +62,7 @@ if __name__ == "__main__":
 
         prices = pd.concat([main_df_1["mcp"], updated_main_df_1["price"]], axis=1)
 
+        print("Solving using Method 2")
         main_df_2, supp_df_2, k_values_2 = method_2(
             gens_df=gens_df,
             k_values_df=k_values_df,
@@ -111,6 +113,8 @@ if __name__ == "__main__":
         updated_main_df_2.to_csv(f"{save_path}/updated_main_df_2.csv")
         updated_supp_df_2.to_csv(f"{save_path}/updated_supp_df_2.csv")
 
+        print("Finished solving. All results saved to csv.")
+
     # %%
     # load data
     path = f"outputs/{case}/gen_{opt_gen}"
@@ -137,16 +141,20 @@ if __name__ == "__main__":
         updated_main_df_2, updated_supp_df_2, gens_df, price_column="price"
     )
 
-    # %% calculate uplifts
+    # calculate uplifts
     uplift_method_2, uplift_df_method_2 = calculate_uplift(
-        updated_main_df_2, gens_df, opt_gen, "price", profits_method_2
+        updated_main_df_2,
+        gens_df,
+        opt_gen,
+        "price",
+        updated_profits_method_2[opt_gen].sum(),
     )
 
     total_profit_with_uplift_method_2 = (
         updated_profits_method_2[opt_gen].sum() + uplift_method_2
     )
 
-    # %%
+    # %% RL Part
     market_orders = pd.read_csv(
         f"{path}/market_orders.csv",
         index_col=0,
@@ -187,9 +195,8 @@ if __name__ == "__main__":
         ):
             rl_unit_profits[t] -= gens_df.at[opt_gen, "k_up"]
 
-    # %%
     uplift_method_rl, uplift_df_method_rl = calculate_uplift(
-        rl_unit_orders, gens_df, opt_gen, "accepted_price", rl_unit_profits
+        rl_unit_orders, gens_df, opt_gen, "accepted_price", rl_unit_profits.sum()
     )
 
     total_profit_with_uplift_method_rl = rl_unit_profits.sum() + uplift_method_rl
@@ -216,7 +223,7 @@ if __name__ == "__main__":
 
     profits = profits.apply(pd.to_numeric, errors="coerce")
     fig = px.bar(
-        title="Total profits",
+        title=f"Total profits of Unit {opt_gen+1}",
         labels={"index": "Method", "Profit": "Profit [€]"},
     )
 
@@ -292,10 +299,10 @@ if __name__ == "__main__":
     fig.update_layout(showlegend=False)
     fig.show()
 
-    # %%
+    # %% Bids of the unit
     bids_method_1 = k_values_1 * gens_df.at[opt_gen, "mc"]
     bids_method_2 = k_values_2 * gens_df.at[opt_gen, "mc"]
-    bids_method_3 = market_orders["price"]
+    bids_method_3 = rl_unit_orders["price"]
 
     bids = pd.concat([bids_method_1, bids_method_2, bids_method_3], axis=1)
     bids.columns = ["Method 1", "Method 2", "Method 3 (RL)"]
@@ -309,16 +316,43 @@ if __name__ == "__main__":
     # plot bids over time
     fig = px.line(
         bids,
-        title="Bids",
+        title=f"Bids of Unit {opt_gen+1}",
         labels={"Time": "Time", "value": "Bid [€/MWh]"},
     )
     fig.update_yaxes(title_text="Bid [€/MWh]")
     fig.update_layout(showlegend=True)
     fig.show()
 
-    # %%
+    # %% Dispatch of the unit
+    dispatch_method_1 = updated_main_df_1[f"gen_{opt_gen}"]
+    dispatch_method_2 = updated_main_df_2[f"gen_{opt_gen}"]
+    dispatch_method_3 = rl_unit_orders["accepted_volume"]
+
+    dispatch = pd.concat(
+        [dispatch_method_1, dispatch_method_2, dispatch_method_3], axis=1
+    )
+    dispatch.columns = ["Method 1", "Method 2", "Method 3 (RL)"]
+
+    # convert all columns to numeric data types
+    dispatch = dispatch.apply(pd.to_numeric, errors="coerce")
+
+    # rename index to time
+    dispatch.index.name = "Time"
+
+    # plot bids over time
+    fig = px.line(
+        dispatch,
+        title=f"Dispatch of Unit {opt_gen+1}",
+        labels={"Time": "Time", "value": "Dispatch [MW]"},
+    )
+
+    fig.update_yaxes(title_text="Dispatch [MW]")
+    fig.update_layout(showlegend=True)
+    fig.show()
+
+    # %% Market clearing price
     mcp_method_1 = main_df_1["mcp"]
-    mcp_method_2 = main_df_2["mcp_hat"]
+    mcp_method_2 = updated_main_df_2["price"]
     mcp_method_3 = market_orders[market_orders["unit_id"] == "demand_EOM"][
         "accepted_price"
     ]
@@ -332,12 +366,12 @@ if __name__ == "__main__":
     mcp = mcp.apply(pd.to_numeric, errors="coerce")
 
     # rename index to time
-    mcp.index.name = "Time"
+    mcp.index.name = "Time step"
 
     # plot bids over time
     fig = px.line(
         mcp,
-        title="MCP",
+        title="Market Clearing Price",
         labels={"Time": "Time", "value": "MCP [€/MWh]"},
     )
 

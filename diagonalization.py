@@ -30,9 +30,9 @@ def run_diagonalization(
     big_w=10000,
     print_results=False,
 ):
-    if method == 1:
+    if method == "method_1":
         find_optimal_k = method_1
-    elif method == 2:
+    elif method == "method_2":
         find_optimal_k = method_2
 
     # gens
@@ -56,7 +56,7 @@ def run_diagonalization(
         last_profit_values = profit_values.copy()
 
         for opt_gen in gens_df.index:
-            print(f"Optimizing for generator {opt_gen}")
+            print(f"Optimizing for generator {opt_gen+1}")
             main_df, supp_df, k = find_optimal_k(
                 gens_df=gens_df,
                 k_values_df=k_values_df,
@@ -72,7 +72,6 @@ def run_diagonalization(
             profit_values[opt_gen] = calculate_profits(main_df, supp_df, gens_df)[
                 opt_gen
             ]
-            print()
 
         diff_in_k = k_values_df - last_k_values
         diff_in_profit = profit_values.sum(axis=0) - last_profit_values.sum(axis=0)
@@ -109,5 +108,33 @@ def run_diagonalization(
     supp_df.to_csv(f"{save_results_path}/supp_df.csv")
     k_values_df.to_csv(f"{save_results_path}/k_values_df.csv")
 
+
+# %% run diagonalization
+if __name__ == "__main__":
+    case = "Case_1"
+
+    big_w = 10000  # weight for duality gap objective
+    k_max = 2  # maximum multiplier for strategic bidding
+    time_limit = 60  # time limit in seconds for each optimization
+
+    start = pd.to_datetime("2019-03-02 00:00")
+    end = pd.to_datetime("2019-03-03 00:00")
+
+    print_results = False
+    solve_diag = True
+
+    method = "method_2"
+
+    if solve_diag:
+        run_diagonalization(
+            case=case,
+            start=start,
+            end=end,
+            method=method,
+            k_max=k_max,
+            time_limit=time_limit,
+            big_w=big_w,
+            print_results=print_results,
+        )
 
 # %%

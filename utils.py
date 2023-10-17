@@ -110,7 +110,7 @@ def calculate_uplift(main_df, gens_df, gen_unit, price_column, profits):
     solver.solve(instance, tee=False)
 
     # calculate uplift
-    uplift = max(instance.objective() - profits[gen_unit].sum(), 0)
+    uplift = max(instance.objective() - profits, 0)
 
     generation_df = pd.DataFrame(index=main_df.index, columns=[f"gen_{gen_unit}"])
     for t in main_df.index:
