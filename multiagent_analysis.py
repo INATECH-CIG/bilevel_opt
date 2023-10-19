@@ -8,32 +8,72 @@ from uc_problem import solve_uc_problem
 from utils import calculate_profits
 
 # %%
-case = "Case_2"
+case = "Case_1"
+start = pd.to_datetime("2019-03-02 00:00")
+end = pd.to_datetime("2019-03-03 00:00")
 
-cashflows = pd.read_csv(
-    f"outputs/{case}/unit_dispatch.csv",
+# gens
+gens_df = pd.read_csv(f"inputs/{case}/gens.csv", index_col=0)
+demand_df = pd.read_csv(f"inputs/{case}/demand.csv", index_col=0)
+demand_df.index = pd.to_datetime(demand_df.index)
+demand_df = demand_df.loc[start:end]
+# reset index to start at 0
+demand_df = demand_df.reset_index(drop=True)
+
+path = f"outputs/{case}/method_1"
+
+# %% RL Part
+market_orders = pd.read_csv(
+    f"{path}/market_orders.csv",
     index_col=0,
     parse_dates=True,
 )
-cashflows = cashflows.loc["2019-03-01"]
 
-profits = pd.DataFrame(index=cashflows.index.unique())
-# group by unit and iterate to get profit
-for unit, df in cashflows.groupby("unit"):
-    profit = df["energy_cashflow"] - df["energy_marginal_costs"]
-    profits[f"{unit}_profit"] = round(profit / 1000, 0)
-    # profits[f"{unit}_mc"] = (round(df["energy_marginal_costs"]/1000,0))
-    # profits[f"{unit}_cf"] = (round(df["energy_cashflow"]/1000,0))
+rl_profits = pd.DataFrame(index=demand_df.index, columns=gens_df.index, data=0.0)
+for opt_gen in gens_df.index:
+    rl_unit_orders = market_orders[market_orders["unit_id"] == f"Unit_{opt_gen}"]
+    rl_unit_orders = rl_unit_orders.loc[start:end]
+    rl_unit_orders = rl_unit_orders.reset_index(drop=False)
+    marginal_cost = gens_df.at[opt_gen, "mc"]
+    rl_profits[opt_gen] = rl_unit_orders["accepted_volume"] * (
+        rl_unit_orders["accepted_price"] - marginal_cost
+    )
 
-# delete demand_EOM_profit
-profits = profits.drop(columns=["demand_EOM_profit"])
+    # iterate over all rows and subtract start up and shut down costs if the unit turned on or off
+    for t in range(1, len(rl_unit_orders)):
+        if t == 1:
+            if (
+                rl_unit_orders.at[t, "accepted_volume"] > 0
+                and gens_df.at[opt_gen, "u_0"] == 0
+            ):
+                rl_profits[opt_gen][t] -= gens_df.at[opt_gen, "k_up"]
+            elif (
+                rl_unit_orders.at[t, "accepted_volume"] == 0
+                and gens_df.at[opt_gen, "u_0"] > 0
+            ):
+                rl_profits[opt_gen][t] -= gens_df.at[opt_gen, "k_down"]
+        elif (
+            rl_unit_orders.at[t, "accepted_volume"] == 0
+            and rl_unit_orders.at[t - 1, "accepted_volume"] > 0
+        ):
+            rl_profits[opt_gen][t] -= gens_df.at[opt_gen, "k_down"]
+        elif (
+            rl_unit_orders.at[t, "accepted_volume"] > 0
+            and rl_unit_orders.at[t - 1, "accepted_volume"] == 0
+        ):
+            rl_profits[opt_gen][t] -= gens_df.at[opt_gen, "k_up"]
 
-# print total profit per unit
-print(profits.sum(axis=0))
+# %%
+uplift_method_rl, uplift_df_method_rl = calculate_uplift(
+    rl_unit_orders, gens_df, opt_gen, "accepted_price", rl_unit_profits.sum()
+)
 
+total_profit_with_uplift_method_rl = rl_unit_profits.sum() + uplift_method_rl
+
+# %%
 # using plotly plot total profits per unit
 fig = px.bar(
-    profits.sum(axis=0),
+    rl_profits.sum(axis=0),
     title="Total profit per unit using DRL",
     labels={"index": "Unit", "Profit": "Profit [k€]"},
 )
@@ -43,126 +83,73 @@ fig.update_yaxes(title_text="Profit [k€]")
 fig.update_layout(showlegend=False)
 fig.show()
 
-# %% load previously saved results
-start = pd.to_datetime("2019-03-01 00:00")
-end = pd.to_datetime("2019-03-02 00:00")
-
-# generators
-gens_df = pd.read_csv(f"inputs/{case}/gens.csv", index_col=0)
-
-# 24 hours of demand first increasing and then decreasing
-demand_df = pd.read_csv(f"inputs/{case}/demand.csv", index_col=0)
-demand_df.index = pd.to_datetime(demand_df.index)
-demand_df = demand_df.loc[start:end]
-# reset index to start at 0
-demand_df = demand_df.reset_index(drop=True)
-
-approx_main_df = pd.read_csv(f"outputs/{case}/approx_main_df.csv", index_col=0)
-approx_supp_df = pd.read_csv(f"outputs/{case}/approx_supp_df.csv")
-k_values_after_convergence = pd.read_csv(f"outputs/{case}/k_values_df.csv", index_col=0)
-k_values_after_convergence.columns = k_values_after_convergence.columns.astype(int)
+# %% load previously saved results for method_1
+main_df_1 = pd.read_csv(f"outputs/{case}/method_1/main_df.csv", index_col=0)
+supp_df_1 = pd.read_csv(f"outputs/{case}/method_1/supp_df.csv")
+k_values_1 = pd.read_csv(f"outputs/{case}/method_1/k_values_df.csv", index_col=0)
+k_values_1.columns = k_values_1.columns.astype(int)
 
 # get true prices and profiles
-true_main_df, true_supp_df = solve_uc_problem(
-    gens_df, demand_df, k_values_after_convergence
+updated_main_df_1, updated_supp_df_1 = solve_uc_problem(
+    gens_df, demand_df, k_values_1
 )
 # get potential profits as difference between prices and marginal costs multiplied by generation
 # and subtracting the startup and shutdown costs
-approx_profits = calculate_profits(approx_main_df, approx_supp_df, gens_df)
-true_profits = calculate_profits(true_main_df, true_supp_df, gens_df)
 
-# convert to t. EUR
-approx_profits /= 1000
-true_profits /= 1000
+profits_method_1 = calculate_profits(main_df_1, supp_df_1, gens_df)
+updated_profits_method_1 = calculate_profits(updated_main_df_1, updated_supp_df_1, gens_df, price_column="price")
 
-# calculate difference between approximated and true profits
-profit_diff = approx_profits - true_profits
-
-# plot the sum of true and approximated profits in one plot as a bar plot for each generator
-fig, ax = plt.subplots()
-x = np.arange(1, len(gens_df.index) + 1)  # the label locations
-width = 0.35  # the width of the bars
-
-rects1 = ax.bar(
-    x - width / 2, round(approx_profits.sum()), width, label="Estimated profits"
+# make a dataframe with the total profits per unit
+total_profits_method_1 = pd.DataFrame(
+    index=profits_method_1.columns, columns=["Method 1"], data=profits_method_1.sum()
 )
-rects2 = ax.bar(x + width / 2, round(true_profits.sum()), width, label="True profits")
+updated_total_profits_method_1 = pd.DataFrame(
+    index=updated_profits_method_1.columns, columns=["Method 1 (updated)"], data=updated_profits_method_1.sum()
+).astype(float)
 
-# Add some text for labels, title and custom x-axis tick labels, etc.
-ax.set_ylabel("Profits in t. EUR")
-ax.set_title("Profits by generator")
-ax.set_xticks(x)
-ax.set_xticklabels(f"Gen {gen+1}" for gen in gens_df.index)
-ax.legend()
+# construct a dataframe with the total profits per unit
+profits = pd.concat(
+    [total_profits_method_1, updated_total_profits_method_1], axis=1, sort=False
+)
 
-
-# also print actual values above the bars
-def autolabel(rects):
-    """Attach a text label above each bar in *rects*, displaying its height."""
-    for rect in rects:
-        height = round(rect.get_height(), 2)
-        ax.annotate(
-            f"{height}",
-            xy=(rect.get_x() + rect.get_width() / 2, height),
-            xytext=(0, 3),  # 3 points vertical offset
-            textcoords="offset points",
-            ha="center",
-            va="bottom",
-        )
-
-
-autolabel(rects1)
-autolabel(rects2)
-
-fig.tight_layout()
-plt.savefig(f"outputs/{case}/profits.png")
-plt.show()
-
-# plot true and approximate prices
-fig, ax = plt.subplots()
-ax.plot(true_main_df["price"].iloc[1:], label="True prices")
-ax.plot(approx_main_df["price"].iloc[1:], label="Approximated prices")
-ax.set_title("Prices")
-ax.set_ylabel("Price in EUR/MWh")
-ax.set_xlabel("Time")
-ax.legend()
-plt.savefig(f"outputs/{case}/prices.png")
-plt.show()
-
-
-# %%
-# plot all profits on one plot as seperate bars
-profits_rl = profits
-profits_opt = true_profits
-# round to 0 decimals
-profits_rl = profits_rl.round(0)
-profits_opt = profits_opt.round(0)
-# rename columns in profits_opt to the same as profits_rl
-profits_opt.columns = profits_rl.columns
-
-# plot all profits on one plot as seperate bars
+# plot the profits as bars
 fig = px.bar(
-    profits_rl.sum(axis=0),
-    title="Total profit per unit using DRL",
+    profits,
+    x=profits.index,
+    y=profits.columns,
+    title="Total profit per unit using Method 1",
     labels={"index": "Unit", "Profit": "Profit [k€]"},
+    barmode="group",
 )
 
-# add true profits
-fig.add_bar(
-    x=profits_opt.sum(axis=0).index,
-    y=profits_opt.sum(axis=0).values,
-    name="using opt",
-)
-# change name of the first bar
-fig.data[0].name = "using DRL"
+fig.update_yaxes(title_text="Profit [€]")
 
-# plot side by side instaed of on top of each other
-fig.update_layout(barmode="group")
-
-# renamy axis to profit in kEUR
-fig.update_yaxes(title_text="Profit [k€]")
-# remove legend
-# fig.update_layout(showlegend=False)
 fig.show()
 
+# %%
+
+#merge all profits
+sum_rl_profits = pd.DataFrame(index=profits_method_1.columns, columns=["DRL"], data=rl_profits.sum())
+all_profits = pd.concat([profits, sum_rl_profits], axis=1, sort=False)
+all_profits /= 1000
+all_profits = all_profits.round()
+# plot the profits as bars
+fig = px.bar(
+    all_profits,
+    x=all_profits.index,
+    y=all_profits.columns,
+    title="Total profit per unit",
+    labels={"index": "Unit", "Profit": "Profit [k€]"},
+    barmode="group",
+)
+
+#display values on top
+fig.update_traces(texttemplate="%{y:.0f}", textposition="outside")
+fig.update_yaxes(title_text="Profit [k€]")
+#save figure as html
+fig.write_html("outputs/total_profits.html")
+# and as pdf
+fig.write_image("outputs/total_profits.pdf")
+
+fig.show()
 # %%

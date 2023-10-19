@@ -12,9 +12,9 @@ from utils import calculate_profits, calculate_uplift
 # %%
 if __name__ == "__main__":
     case = "Case_1"
-    opt_gen = 0  # generator that is allowed to bid strategically
+    opt_gen = 2  # generator that is allowed to bid strategically
 
-    big_w = 1000000  # weight for duality gap objective
+    big_w = 100000  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
     time_limit = 30  # time limit in seconds for each optimization
 
@@ -101,6 +101,9 @@ if __name__ == "__main__":
         if not os.path.exists(save_path):
             os.makedirs(save_path)
 
+        k_values_1.to_csv(f"{save_path}/k_values_1.csv")
+        k_values_2.to_csv(f"{save_path}/k_values_2.csv")
+
         main_df_1.to_csv(f"{save_path}/main_df_1.csv")
         supp_df_1.to_csv(f"{save_path}/supp_df_1.csv")
 
@@ -118,6 +121,10 @@ if __name__ == "__main__":
     # %%
     # load data
     path = f"outputs/{case}/gen_{opt_gen}"
+
+    k_values_1 = pd.read_csv(f"{path}/k_values_1.csv", index_col=0)
+    k_values_2 = pd.read_csv(f"{path}/k_values_2.csv", index_col=0)
+
     main_df_1 = pd.read_csv(f"{path}/main_df_1.csv", index_col=0)
     supp_df_1 = pd.read_csv(f"{path}/supp_df_1.csv", index_col=0)
 
@@ -295,8 +302,17 @@ if __name__ == "__main__":
     # display values on top of bars
     fig.update_traces(texttemplate="%{y:.0f}", textposition="outside")
 
+    # adjust y axis range to fit all bars and text above them
+    #fig.update_yaxes(range=[0, 0.7e6])
+
     fig.update_yaxes(title_text="Profit [€]")
     fig.update_layout(showlegend=False)
+
+    # save plot as pdf
+    fig.write_image(f"outputs/{case}/profits_{opt_gen}.pdf")
+
+    # save plot as html
+    fig.write_html(f"outputs/{case}/profits_{opt_gen}.html")
     fig.show()
 
     # %% Bids of the unit
@@ -319,8 +335,13 @@ if __name__ == "__main__":
         title=f"Bids of Unit {opt_gen+1}",
         labels={"Time": "Time", "value": "Bid [€/MWh]"},
     )
+
     fig.update_yaxes(title_text="Bid [€/MWh]")
     fig.update_layout(showlegend=True)
+    # save plot as html
+    fig.write_html(f"outputs/{case}/bids_{opt_gen}.html")
+    # save plot as pdf
+    fig.write_image(f"outputs/{case}/bids_{opt_gen}.pdf")
     fig.show()
 
     # %% Dispatch of the unit
@@ -348,6 +369,11 @@ if __name__ == "__main__":
 
     fig.update_yaxes(title_text="Dispatch [MW]")
     fig.update_layout(showlegend=True)
+
+    # save plot as html
+    fig.write_html(f"outputs/{case}/dispatch_{opt_gen}.html")
+    # save plot as pdf
+    fig.write_image(f"outputs/{case}/dispatch_{opt_gen}.pdf")
     fig.show()
 
     # %% Market clearing price
@@ -377,6 +403,10 @@ if __name__ == "__main__":
 
     fig.update_yaxes(title_text="MCP [€/MWh]")
     fig.update_layout(showlegend=True)
+    # save plot as html
+    fig.write_html(f"outputs/{case}/mcp_{opt_gen}.html")
+    # save plot as pdf
+    fig.write_image(f"outputs/{case}/mcp_{opt_gen}.pdf")
     fig.show()
 
     # %%
@@ -408,5 +438,147 @@ if __name__ == "__main__":
     #save plot as pdf
     fig.write_image(f"outputs/{case}/demand.pdf")
     fig.show()
+
+    # %%
+    #plot marginal costs of each unit as bar plot and name it marginal cost
+    # Reshape the DataFrame to have separate rows for each unit's marginal cost and its multiplied value
+
+    # Reshape the DataFrame to have separate rows for each unit's marginal cost and its multiplied value
+    df = pd.DataFrame({
+        "Unit": gens_df.index,
+        "Marginal cost": gens_df["mc"],
+        "Bidding interval": gens_df["mc"] * 2
+    })
+
+    # Create the figure object
+    fig = px.bar(
+        df,
+        x="Unit",
+        y=["Marginal cost", "Bidding interval"],
+        barmode="group",  # Set the barmode to "group" for side-by-side bars
+        title="Marginal costs",
+        labels={"x": "Unit", "y": "Marginal cost [€/MWh]"},
+    )
+
+    # rename y axis to Marginal cost [€/MWh]
+    fig.update_yaxes(title_text="Marginal cost [€/MWh]")
+
+    # Set the opacity of the second set of bars to make them semitransparent
+    fig.update_traces(opacity=0.6, selector=dict(name="Bidding interval"))
+
+    #display values on top of bars
+    fig.update_traces(texttemplate="%{y:.0f}", textposition="outside")
+
+    #display the legend below the plot
+    fig.update_layout(legend=dict(
+        orientation="h",
+        yanchor="bottom",
+        y=1.,
+        xanchor="right",
+        x=1
+    ))
+
+    #y axis form 0 to 200
+    fig.update_yaxes(range=[0, 200])
+
+    #save plot as html
+    fig.write_html(f"outputs/{case}/marginal_costs.html")
+    #save plot as pdf
+    fig.write_image(f"outputs/{case}/marginal_costs.pdf")
+
+    fig.show()
+
+
+
+
+    # %%
+    #plot mcp and mcp_hat from main_df_2
+    fig = px.line(
+        main_df_2[["mcp", "mcp_hat"]],
+        title="Market Clearing Price",
+        labels={"Time": "Time", "value": "MCP [€/MWh]"},
+    )
+
+    #rename the lines into MCP, MCP_hat
+    fig.data[0].name = "MCP"
+    fig.data[1].name = "MCP_hat"
+
+    # also add the price from updated_main_df_2
+    fig.add_scatter(
+        x=updated_main_df_2.index,
+        y=updated_main_df_2["price"],
+        name="MCP after UC",
+    )
+    fig.update_xaxes(title_text="Time step")
+    # save plot as html
+    fig.write_html(f"outputs/{case}/mcp.html")
+    # save plot as pdf
+    fig.write_image(f"outputs/{case}/mcp.pdf")
+    fig.show()
+
+
+    # %%
+    #plot profits_method_2 and updated_profits_method_2 for opt_gen
+    profits = pd.concat(
+        [
+            profits_method_1[opt_gen],
+            updated_profits_method_1[opt_gen],
+            profits_method_2[opt_gen],
+            updated_profits_method_2[opt_gen],
+        ],
+        axis=1,
+    )
+    profits.columns = [
+        "Method 1",
+        "Method 1 (after UC)",
+        "Method 2",
+        "Method 2 (after UC)",
+    ]
+
+    profits = profits.apply(pd.to_numeric, errors="coerce")
+    fig = px.bar(
+        title=f"Total profits of Unit {opt_gen+1}",
+        labels={"index": "Method", "Profit": "Profit [€]"},
+    )
+
+    # add Method 1 bar
+    fig.add_bar(
+        x=["Method 1"],
+        y=[profits["Method 1"].sum()],
+        name="Method 1",
+    )
+
+    # add Method 1 (after UC) bar
+    fig.add_bar(
+        x=["Method 1 (after UC)"],
+        y=[profits["Method 1 (after UC)"].sum()],
+        name="Method 1 (after UC)",
+    )
+
+    # add Method 2 bar
+    fig.add_bar(
+        x=["Method 2"],
+        y=[profits["Method 2"].sum()],
+        name="Method 2",
+    )
+
+    # add Method 2 (after UC) bar
+    fig.add_bar(
+        x=["Method 2 (after UC)"],
+        y=[profits["Method 2 (after UC)"].sum()],
+        name="Method 2 (after UC)",
+    )
+
+    #display values on top of bars
+    fig.update_traces(texttemplate="%{y:.0f}", textposition="outside")
+
+    #disable legend
+    fig.update_layout(showlegend=False)
+
+    #save plot as pdf
+    fig.write_image(f"outputs/{case}/profits.pdf")
+
+    fig.show()
+
 
 # %%
