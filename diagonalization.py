@@ -43,7 +43,8 @@ def run_diagonalization(
     profit_values = pd.DataFrame(columns=gens_df.index, index=demand_df.index, data=0.0)
     print(f"Starting diagonalization using {method}")
 
-    total_profits = -1e6
+    max_average_profits = -1e6
+    iterations_without_change = 0
     i = 1
     while True:
         print()
@@ -52,7 +53,7 @@ def run_diagonalization(
         last_profit_values = profit_values.copy()
 
         # iterate over units in reverse order
-        for opt_gen in gens_df.index[::-1]:
+        for opt_gen in gens_df.index:
             print(f"Optimizing for Unit {opt_gen+1}")
             try:
                 main_df, supp_df, k = find_optimal_k(
@@ -90,15 +91,26 @@ def run_diagonalization(
             print(f"Profits did not change. Convergence reached at iteration {i}")
             break
 
-        if sum(profit_values.sum(axis=0)) > total_profits:
-            print(f"New better solution found at iteration {i}")
-            print("Saving preliminary results...")
-            min_profit_diff = sum(abs(diff_in_profit))
+        average_profits = profit_values.mean(axis=1).mean()
+        print("Average profit", average_profits)
+
+        if average_profits > max_average_profits:
+            print("New best solution found. Saving results...")
+            max_average_profits = average_profits
+                        
             # save preliminary results
             save_results_path = f"outputs/{case}/{method}/preliminary"
             save_results(
                 save_results_path, main_df, supp_df, k_values_df
             )
+            iterations_without_change = 0
+        else:
+            iterations_without_change += 1
+
+        if iterations_without_change > 10:
+            print("No improvement in 10 iterations. Stopping.")
+            break
+
         i += 1
 
     print("Final results:")
@@ -112,8 +124,6 @@ def run_diagonalization(
         save_results_path, main_df, supp_df, k_values_df
     )
 
-
-# TODO Rename this here and in `run_diagonalization`
 def save_results(
     save_results_path, main_df, supp_df, k_values_df
 ):

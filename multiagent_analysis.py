@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 
-from uc_problem import solve_and_get_prices
+from uc_problem import solve_uc_problem
 from utils import calculate_profits
 
 # %%
@@ -63,7 +63,7 @@ k_values_after_convergence = pd.read_csv(f"outputs/{case}/k_values_df.csv", inde
 k_values_after_convergence.columns = k_values_after_convergence.columns.astype(int)
 
 # get true prices and profiles
-true_main_df, true_supp_df = solve_and_get_prices(
+true_main_df, true_supp_df = solve_uc_problem(
     gens_df, demand_df, k_values_after_convergence
 )
 # get potential profits as difference between prices and marginal costs multiplied by generation

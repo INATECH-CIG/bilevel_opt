@@ -379,4 +379,34 @@ if __name__ == "__main__":
     fig.update_layout(showlegend=True)
     fig.show()
 
+    # %%
+    # plot demand_df
+    fig = px.line(
+        demand_df["volume"],
+        title="Demand",
+        labels={"Time": "Time", "value": "Demand [MW]"},
+    )
+    # rename the line into Demand [MWh]
+    fig.data[0].name = "Demand [MW]"
+
+    #add capacity of each unit as horizontal line
+    # accumulate the capacity
+    # and name the horizontal line after the unit
+    capacity = 0
+    for i in range(len(gens_df)):
+        capacity += gens_df.at[i, "g_max"]
+        fig.add_hline(y=capacity, line_dash="dash", annotation_text=f"Unit {i+1}")
+
+    #y axis from 0 to 3500
+    fig.update_yaxes(range=[0, 4000])
+    fig.update_yaxes(title_text="Demand [MW]")
+    #rename x axis to Time step
+    fig.update_xaxes(title_text="Time step")
+    fig.update_layout(showlegend=False)
+    #save plot as html
+    fig.write_html(f"outputs/{case}/demand.html")
+    #save plot as pdf
+    fig.write_image(f"outputs/{case}/demand.pdf")
+    fig.show()
+
 # %%
