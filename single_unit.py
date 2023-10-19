@@ -12,11 +12,11 @@ from utils import calculate_profits, calculate_uplift
 # %%
 if __name__ == "__main__":
     case = "Case_1"
-    opt_gen = 3  # generator that is allowed to bid strategically
+    opt_gen = 0  # generator that is allowed to bid strategically
 
-    big_w = 10000  # weight for duality gap objective
+    big_w = 1000000  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
-    time_limit = 60  # time limit in seconds for each optimization
+    time_limit = 30  # time limit in seconds for each optimization
 
     start = pd.to_datetime("2019-03-02 00:00")
     end = pd.to_datetime("2019-03-03 00:00")
@@ -160,7 +160,7 @@ if __name__ == "__main__":
         index_col=0,
         parse_dates=True,
     )
-    unit_id = f"Unit {opt_gen+1}"
+    unit_id = f"Unit_{opt_gen}"
     rl_unit_orders = market_orders[market_orders["unit_id"] == unit_id]
     rl_unit_orders = rl_unit_orders.loc[start:end]
     rl_unit_orders = rl_unit_orders.reset_index(drop=False)

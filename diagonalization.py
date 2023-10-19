@@ -4,14 +4,8 @@ Created by: Nick Harder (nick.harder94@gmail.com)
 Created on August, 21th, 2023
 
 """
-
-import os
-
-import matplotlib.pyplot as plt
-import numpy as np
-
 # %%
-# Imports
+import os
 import pandas as pd
 
 from model_1 import find_optimal_k_method_1 as method_1
@@ -47,7 +41,9 @@ def run_diagonalization(
 
     k_values_df = pd.DataFrame(columns=gens_df.index, index=demand_df.index, data=1.0)
     profit_values = pd.DataFrame(columns=gens_df.index, index=demand_df.index, data=0.0)
-    # %% solve diagonalization and save results
+    print(f"Starting diagonalization using {method}")
+
+    total_profits = -1e6
     i = 1
     while True:
         print()
@@ -55,18 +51,24 @@ def run_diagonalization(
         last_k_values = k_values_df.copy()
         last_profit_values = profit_values.copy()
 
-        for opt_gen in gens_df.index:
-            print(f"Optimizing for generator {opt_gen+1}")
-            main_df, supp_df, k = find_optimal_k(
-                gens_df=gens_df,
-                k_values_df=k_values_df,
-                demand_df=demand_df,
-                k_max=k_max,
-                opt_gen=opt_gen,
-                big_w=big_w,
-                time_limit=time_limit,
-                print_results=print_results,
-            )
+        # iterate over units in reverse order
+        for opt_gen in gens_df.index[::-1]:
+            print(f"Optimizing for Unit {opt_gen+1}")
+            try:
+                main_df, supp_df, k = find_optimal_k(
+                    gens_df=gens_df,
+                    k_values_df=k_values_df,
+                    demand_df=demand_df,
+                    k_max=k_max,
+                    opt_gen=opt_gen,
+                    big_w=big_w,
+                    time_limit=time_limit,
+                    print_results=print_results,
+                )
+            except Exception as e:
+                print(f"Error: {e}")
+                print(f"Optimization for Unit {opt_gen+1} failed. Continuing...")
+                continue
 
             k_values_df[opt_gen] = k
             profit_values[opt_gen] = calculate_profits(main_df, supp_df, gens_df)[
@@ -76,9 +78,6 @@ def run_diagonalization(
         diff_in_k = k_values_df - last_k_values
         diff_in_profit = profit_values.sum(axis=0) - last_profit_values.sum(axis=0)
         diff_in_profit /= 1000
-
-        print("Difference in k values:")
-        print(abs(diff_in_k).max())
 
         print("Difference in profits:")
         print(diff_in_profit)
@@ -91,6 +90,15 @@ def run_diagonalization(
             print(f"Profits did not change. Convergence reached at iteration {i}")
             break
 
+        if sum(profit_values.sum(axis=0)) > total_profits:
+            print(f"New better solution found at iteration {i}")
+            print("Saving preliminary results...")
+            min_profit_diff = sum(abs(diff_in_profit))
+            # save preliminary results
+            save_results_path = f"outputs/{case}/{method}/preliminary"
+            save_results(
+                save_results_path, main_df, supp_df, k_values_df
+            )
         i += 1
 
     print("Final results:")
@@ -99,7 +107,16 @@ def run_diagonalization(
     print("Final bidding decisions:")
     print(k_values_df)
 
-    save_results_path = f"outputs/{case}/method_{method}"
+    save_results_path = f"outputs/{case}/{method}"
+    save_results(
+        save_results_path, main_df, supp_df, k_values_df
+    )
+
+
+# TODO Rename this here and in `run_diagonalization`
+def save_results(
+    save_results_path, main_df, supp_df, k_values_df
+):
     # make sure output folder exists
     if not os.path.exists(save_results_path):
         os.makedirs(save_results_path)
@@ -115,7 +132,7 @@ if __name__ == "__main__":
 
     big_w = 10000  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
-    time_limit = 60  # time limit in seconds for each optimization
+    time_limit = 30  # time limit in seconds for each optimization
 
     start = pd.to_datetime("2019-03-02 00:00")
     end = pd.to_datetime("2019-03-03 00:00")
