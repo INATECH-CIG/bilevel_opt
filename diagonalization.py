@@ -6,6 +6,7 @@ Created on August, 21th, 2023
 """
 # %%
 import os
+
 import pandas as pd
 
 from model_1 import find_optimal_k_method_1 as method_1
@@ -97,12 +98,10 @@ def run_diagonalization(
         if average_profits > max_average_profits:
             print("New best solution found. Saving results...")
             max_average_profits = average_profits
-                        
+
             # save preliminary results
             save_results_path = f"outputs/{case}/{method}/preliminary"
-            save_results(
-                save_results_path, main_df, supp_df, k_values_df
-            )
+            save_results(save_results_path, main_df, supp_df, k_values_df)
             iterations_without_change = 0
         else:
             iterations_without_change += 1
@@ -120,13 +119,10 @@ def run_diagonalization(
     print(k_values_df)
 
     save_results_path = f"outputs/{case}/{method}"
-    save_results(
-        save_results_path, main_df, supp_df, k_values_df
-    )
+    save_results(save_results_path, main_df, supp_df, k_values_df)
 
-def save_results(
-    save_results_path, main_df, supp_df, k_values_df
-):
+
+def save_results(save_results_path, main_df, supp_df, k_values_df):
     # make sure output folder exists
     if not os.path.exists(save_results_path):
         os.makedirs(save_results_path)

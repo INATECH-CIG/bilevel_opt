@@ -4,17 +4,19 @@ import os
 import pandas as pd
 import plotly.express as px
 
-from model_1 import find_optimal_k_method_1 as method_1
-from model_2 import find_optimal_k_method_2 as method_2
+# from model_1 import find_optimal_k_method_1 as method_1
+# from model_2 import find_optimal_k_method_2 as method_2
+from model_1_discrete import find_optimal_k_method_1_new as method_1
+from model_2_discrete import find_optimal_k_method_2 as method_2
 from uc_problem import solve_uc_problem
 from utils import calculate_profits, calculate_uplift
 
 # %%
 if __name__ == "__main__":
     case = "Case_1"
-    opt_gen = 2  # generator that is allowed to bid strategically
+    opt_gen = 0  # generator that is allowed to bid strategically
 
-    big_w = 100000  # weight for duality gap objective
+    big_w = 1000  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
     time_limit = 30  # time limit in seconds for each optimization
 
@@ -303,7 +305,7 @@ if __name__ == "__main__":
     fig.update_traces(texttemplate="%{y:.0f}", textposition="outside")
 
     # adjust y axis range to fit all bars and text above them
-    #fig.update_yaxes(range=[0, 0.7e6])
+    # fig.update_yaxes(range=[0, 0.7e6])
 
     fig.update_yaxes(title_text="Profit [€]")
     fig.update_layout(showlegend=False)
@@ -378,7 +380,7 @@ if __name__ == "__main__":
 
     # %% Market clearing price
     mcp_method_1 = main_df_1["mcp"]
-    mcp_method_2 = updated_main_df_2["price"]
+    mcp_method_2 = main_df_2["mcp_hat"]
     mcp_method_3 = market_orders[market_orders["unit_id"] == "demand_EOM"][
         "accepted_price"
     ]
@@ -419,7 +421,7 @@ if __name__ == "__main__":
     # rename the line into Demand [MWh]
     fig.data[0].name = "Demand [MW]"
 
-    #add capacity of each unit as horizontal line
+    # add capacity of each unit as horizontal line
     # accumulate the capacity
     # and name the horizontal line after the unit
     capacity = 0
@@ -427,28 +429,30 @@ if __name__ == "__main__":
         capacity += gens_df.at[i, "g_max"]
         fig.add_hline(y=capacity, line_dash="dash", annotation_text=f"Unit {i+1}")
 
-    #y axis from 0 to 3500
+    # y axis from 0 to 3500
     fig.update_yaxes(range=[0, 4000])
     fig.update_yaxes(title_text="Demand [MW]")
-    #rename x axis to Time step
+    # rename x axis to Time step
     fig.update_xaxes(title_text="Time step")
     fig.update_layout(showlegend=False)
-    #save plot as html
+    # save plot as html
     fig.write_html(f"outputs/{case}/demand.html")
-    #save plot as pdf
+    # save plot as pdf
     fig.write_image(f"outputs/{case}/demand.pdf")
     fig.show()
 
     # %%
-    #plot marginal costs of each unit as bar plot and name it marginal cost
+    # plot marginal costs of each unit as bar plot and name it marginal cost
     # Reshape the DataFrame to have separate rows for each unit's marginal cost and its multiplied value
 
     # Reshape the DataFrame to have separate rows for each unit's marginal cost and its multiplied value
-    df = pd.DataFrame({
-        "Unit": gens_df.index,
-        "Marginal cost": gens_df["mc"],
-        "Bidding interval": gens_df["mc"] * 2
-    })
+    df = pd.DataFrame(
+        {
+            "Unit": gens_df.index,
+            "Marginal cost": gens_df["mc"],
+            "Bidding interval": gens_df["mc"] * 2,
+        }
+    )
 
     # Create the figure object
     fig = px.bar(
@@ -466,40 +470,33 @@ if __name__ == "__main__":
     # Set the opacity of the second set of bars to make them semitransparent
     fig.update_traces(opacity=0.6, selector=dict(name="Bidding interval"))
 
-    #display values on top of bars
+    # display values on top of bars
     fig.update_traces(texttemplate="%{y:.0f}", textposition="outside")
 
-    #display the legend below the plot
-    fig.update_layout(legend=dict(
-        orientation="h",
-        yanchor="bottom",
-        y=1.,
-        xanchor="right",
-        x=1
-    ))
+    # display the legend below the plot
+    fig.update_layout(
+        legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="right", x=1)
+    )
 
-    #y axis form 0 to 200
+    # y axis form 0 to 200
     fig.update_yaxes(range=[0, 200])
 
-    #save plot as html
+    # save plot as html
     fig.write_html(f"outputs/{case}/marginal_costs.html")
-    #save plot as pdf
+    # save plot as pdf
     fig.write_image(f"outputs/{case}/marginal_costs.pdf")
 
     fig.show()
 
-
-
-
     # %%
-    #plot mcp and mcp_hat from main_df_2
+    # plot mcp and mcp_hat from main_df_2
     fig = px.line(
         main_df_2[["mcp", "mcp_hat"]],
         title="Market Clearing Price",
         labels={"Time": "Time", "value": "MCP [€/MWh]"},
     )
 
-    #rename the lines into MCP, MCP_hat
+    # rename the lines into MCP, MCP_hat
     fig.data[0].name = "MCP"
     fig.data[1].name = "MCP_hat"
 
@@ -516,9 +513,8 @@ if __name__ == "__main__":
     fig.write_image(f"outputs/{case}/mcp.pdf")
     fig.show()
 
-
     # %%
-    #plot profits_method_2 and updated_profits_method_2 for opt_gen
+    # plot profits_method_2 and updated_profits_method_2 for opt_gen
     profits = pd.concat(
         [
             profits_method_1[opt_gen],
@@ -569,13 +565,13 @@ if __name__ == "__main__":
         name="Method 2 (after UC)",
     )
 
-    #display values on top of bars
+    # display values on top of bars
     fig.update_traces(texttemplate="%{y:.0f}", textposition="outside")
 
-    #disable legend
+    # disable legend
     fig.update_layout(showlegend=False)
 
-    #save plot as pdf
+    # save plot as pdf
     fig.write_image(f"outputs/{case}/profits.pdf")
 
     fig.show()

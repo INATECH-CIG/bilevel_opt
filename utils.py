@@ -129,3 +129,41 @@ def calculate_uplift(main_df, gens_df, gen_unit, price_column, profits):
     uplift_df = pd.concat([generation_df, start_up_cost, shut_down_cost], axis=1)
 
     return uplift, uplift_df
+
+
+def calculate_rl_profit(gens_df, demand_df, market_orders, start, end):
+    rl_profits = pd.DataFrame(index=demand_df.index, columns=gens_df.index, data=0.0)
+    for opt_gen in gens_df.index:
+        rl_unit_orders = market_orders[market_orders["unit_id"] == f"Unit_{opt_gen}"]
+        rl_unit_orders = rl_unit_orders.loc[start:end]
+        rl_unit_orders = rl_unit_orders.reset_index(drop=False)
+        marginal_cost = gens_df.at[opt_gen, "mc"]
+        rl_profits[opt_gen] = rl_unit_orders["accepted_volume"] * (
+            rl_unit_orders["accepted_price"] - marginal_cost
+        )
+
+        # iterate over all rows and subtract start up and shut down costs if the unit turned on or off
+        for t in range(1, len(rl_unit_orders)):
+            if t == 1:
+                if (
+                    rl_unit_orders.at[t, "accepted_volume"] > 0
+                    and gens_df.at[opt_gen, "u_0"] == 0
+                ):
+                    rl_profits[opt_gen][t] -= gens_df.at[opt_gen, "k_up"]
+                elif (
+                    rl_unit_orders.at[t, "accepted_volume"] == 0
+                    and gens_df.at[opt_gen, "u_0"] > 0
+                ):
+                    rl_profits[opt_gen][t] -= gens_df.at[opt_gen, "k_down"]
+            elif (
+                rl_unit_orders.at[t, "accepted_volume"] == 0
+                and rl_unit_orders.at[t - 1, "accepted_volume"] > 0
+            ):
+                rl_profits[opt_gen][t] -= gens_df.at[opt_gen, "k_down"]
+            elif (
+                rl_unit_orders.at[t, "accepted_volume"] > 0
+                and rl_unit_orders.at[t - 1, "accepted_volume"] == 0
+            ):
+                rl_profits[opt_gen][t] -= gens_df.at[opt_gen, "k_up"]
+
+    return rl_profits

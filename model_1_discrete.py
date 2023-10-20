@@ -4,13 +4,14 @@ import pyomo.environ as pyo
 from pyomo.opt import SolverFactory
 
 
-def find_optimal_k_method_1(
+def find_optimal_k_method_1_new(
     gens_df,
     k_values_df,
     demand_df,
     k_max,
     opt_gen,
     big_w=10000,
+    K=5,
     time_limit=60,
     print_results=False,
 ):
@@ -42,10 +43,71 @@ def find_optimal_k_method_1(
 
     model.psi_max = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
 
+    # binary expansion variables
+    model.g_binary = pyo.Var(model.gens, model.time, range(K), within=pyo.Binary)
+    model.lambda_g = pyo.Var(model.time, range(K), within=pyo.NonNegativeReals)
+    model.k_g = pyo.Var(model.time, range(K), within=pyo.NonNegativeReals)
+
+    model.M = pyo.Param(initialize=max(gens_df["mc"]) * k_max)
+    delta = [gens_df.at[gen, "g_max"] / (pow(2, K) - 1) for gen in gens_df.index]
+
+    def g_binary_rule(model, gen, t):
+        return model.g[gen, t] == delta[gen] * sum(
+            pow(2, k) * model.g_binary[gen, t, k] for k in range(K)
+        )
+
+    # model.g_binary_constr = pyo.Constraint(model.gens, model.time, rule=g_binary_rule)
+
+    def binary_expansion_1_constr_1_max_rule(model, t, n):
+        return model.lambda_[t] - model.lambda_g[t, n] <= model.M * (
+            1 - model.g_binary[opt_gen, t, n]
+        )
+
+    model.binary_expansion_1_constr_1_max = pyo.Constraint(
+        model.time, range(K), rule=binary_expansion_1_constr_1_max_rule
+    )
+
+    def binary_expansion_1_constr_1_min_rule(model, t, n):
+        return model.lambda_[t] - model.lambda_g[t, n] >= 0
+
+    model.binary_expansion_1_constr_1_min = pyo.Constraint(
+        model.time, range(K), rule=binary_expansion_1_constr_1_min_rule
+    )
+
+    def binary_expansion_1_constr_2_rule(model, t, n):
+        return model.lambda_g[t, n] <= model.M * model.g_binary[opt_gen, t, n]
+
+    model.binary_expansion_1_constr_2 = pyo.Constraint(
+        model.time, range(K), rule=binary_expansion_1_constr_2_rule
+    )
+
+    def binary_expansion_2_constr_1_max_rule(model, t, n):
+        return model.k[t] - model.k_g[t, n] <= model.M * (
+            1 - model.g_binary[opt_gen, t, n]
+        )
+
+    model.binary_expansion_2_constr_1_max = pyo.Constraint(
+        model.time, range(K), rule=binary_expansion_2_constr_1_max_rule
+    )
+
+    def binary_expansion_2_constr_1_min_rule(model, t, n):
+        return model.k[t] - model.k_g[t, n] >= 0
+
+    model.binary_expansion_2_constr_1_min = pyo.Constraint(
+        model.time, range(K), rule=binary_expansion_2_constr_1_min_rule
+    )
+
+    def binary_expansion_2_constr_2_rule(model, t, n):
+        return model.k_g[t, n] <= model.M * model.g_binary[opt_gen, t, n]
+
+    model.binary_expansion_2_constr_2 = pyo.Constraint(
+        model.time, range(K), rule=binary_expansion_2_constr_2_rule
+    )
+
     # objective rules
     def primary_objective_rule(model):
         return sum(
-            model.lambda_[t] * model.g[opt_gen, t]
+            delta[opt_gen] * sum(pow(2, n) * model.lambda_g[t, n] for n in range(K))
             - gens_df.at[opt_gen, "mc"] * model.g[opt_gen, t]
             - model.c_up[opt_gen, t]
             - model.c_down[opt_gen, t]
@@ -55,7 +117,9 @@ def find_optimal_k_method_1(
     def duality_gap_part_1_rule(model):
         expr = sum(
             (
-                model.k[t] * gens_df.at[gen, "mc"] * model.g[gen, t]
+                gens_df.at[gen, "mc"]
+                * delta[gen]
+                * sum(pow(2, n) * model.k_g[t, n] for n in range(K))
                 + gens_df.at[gen, "f"] * model.u[gen, t]
                 + model.c_up[gen, t]
                 + model.c_down[gen, t]
@@ -273,7 +337,7 @@ def find_optimal_k_method_1(
     instance = model.create_instance()
 
     solver = SolverFactory("gurobi")
-    options = {"NonConvex": 2, "LogToConsole": print_results, "TimeLimit": time_limit}
+    options = {"LogToConsole": print_results, "TimeLimit": time_limit}
 
     results = solver.solve(instance, options=options, tee=print_results)
 
@@ -325,11 +389,11 @@ def find_optimal_k_method_1(
 if __name__ == "__main__":
     case = "Case_1"
 
-    big_w = 1000  # weight for duality gap objective
+    big_w = 10000  # weight for duality gap objective
     k_max = 1  # maximum multiplier for strategic bidding
 
     start = pd.to_datetime("2019-03-01 00:00")
-    end = pd.to_datetime("2019-03-02 00:00")
+    end = pd.to_datetime("2019-03-01 03:00")
 
     # gens
     gens_df = pd.read_csv(f"inputs/{case}/gens.csv", index_col=0)
@@ -342,9 +406,9 @@ if __name__ == "__main__":
     demand_df = demand_df.reset_index(drop=True)
 
     k_values_df = pd.DataFrame(columns=gens_df.index, index=demand_df.index, data=1.0)
-    opt_gen = 2  # generator that is allowed to bid strategically
+    opt_gen = 0  # generator that is allowed to bid strategically
 
-    main_df, supp_df, k_values = find_optimal_k_method_1(
+    main_df, supp_df, k_values = find_optimal_k_method_1_new(
         gens_df=gens_df,
         k_values_df=k_values_df,
         demand_df=demand_df,
@@ -357,4 +421,5 @@ if __name__ == "__main__":
 
     print(main_df)
     print()
+
     # %%

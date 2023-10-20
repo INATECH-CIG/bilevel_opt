@@ -12,7 +12,7 @@ from utils import calculate_profits, calculate_uplift
 # %%
 if __name__ == "__main__":
     case = "Case_1"
-    method = "method_2"
+    method = "method_1"
 
     big_w = 10000  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
@@ -31,17 +31,34 @@ if __name__ == "__main__":
     # reset index to start at 0
     demand_df = demand_df.reset_index(drop=True)
 
-    preliminary = True
+    preliminary = False
     if preliminary:
         path = f"outputs/{case}/{method}/preliminary"
     else:
         path = f"outputs/{case}/{method}"
 
-    k_values_df = pd.read_csv(
-        f"{path}/k_values_df.csv", index_col=0
-    )
-    # convert columns to int
-    k_values_df.columns = k_values_df.columns.astype(int)
+    rl_mode = True
+    if rl_mode:
+        market_orders = pd.read_csv(
+            f"{path}/market_orders.csv",
+            index_col=0,
+            parse_dates=True,
+        )
+        k_values_df = pd.DataFrame(
+            index=demand_df.index, columns=gens_df.index, data=0.0
+        )
+        for opt_gen in gens_df.index:
+            rl_unit_orders = market_orders[
+                market_orders["unit_id"] == f"Unit_{opt_gen}"
+            ]
+            rl_unit_orders = rl_unit_orders.loc[start:end]
+            rl_unit_orders = rl_unit_orders.reset_index(drop=False)
+            marginal_cost = gens_df.at[opt_gen, "mc"]
+            k_values_df[opt_gen] = rl_unit_orders["price"] / marginal_cost
+    else:
+        k_values_df = pd.read_csv(f"{path}/k_values_df.csv", index_col=0)
+        # convert columns to int
+        k_values_df.columns = k_values_df.columns.astype(int)
 
     print_results = False
 
@@ -70,12 +87,38 @@ if __name__ == "__main__":
 
     # %%
     # compare k_values_df and k_values_new for opt_gen
-    print("Previous k_values")
-    print(k_values_df)
-    print("\nNew k_values")
-    print(new_k_values)
+    # print("Previous k_values")
+    # print(k_values_df)
+    # print("\nNew k_values")
+    # print(new_k_values)
+
+    # plot both k_values_df for each unit
+    fig = px.line(
+        k_values_df,
+        title="Previous k values",
+        labels={"index": "Time", "value": "k"},
+    )
+
+    # rename lines to Previous k values for Unit x
+    for opt_gen in gens_df.index:
+        fig.data[opt_gen].name = f"Prev. k: Unit {opt_gen+1}"
+
+    # also plot new k_values_df for each unit
+    for opt_gen in gens_df.index:
+        fig.add_scatter(
+            x=new_k_values.index,
+            y=new_k_values[opt_gen],
+            name=f"New k: Unit {opt_gen+1}",
+        )
+
+    # make the plot bigger
+    fig.update_layout(height=400, width=600)
+
+    fig.show()
+    # %%
 
     diff = k_values_df - new_k_values
+    diff = diff.abs()
     print("\nDifference")
     print(diff)
 
