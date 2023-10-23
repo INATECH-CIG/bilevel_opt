@@ -54,7 +54,7 @@ updated_main_df_1, updated_supp_df_1 = solve_uc_problem(gens_df, demand_df, k_va
 
 profits_method_1 = calculate_profits(main_df_1, supp_df_1, gens_df)
 updated_profits_method_1 = calculate_profits(
-    updated_main_df_1, updated_supp_df_1, gens_df, price_column="price"
+    updated_main_df_1, updated_supp_df_1, gens_df
 )
 
 # make a dataframe with the total profits per unit

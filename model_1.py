@@ -326,10 +326,10 @@ if __name__ == "__main__":
     case = "Case_1"
 
     big_w = 1000  # weight for duality gap objective
-    k_max = 1  # maximum multiplier for strategic bidding
+    k_max = 2  # maximum multiplier for strategic bidding
 
-    start = pd.to_datetime("2019-03-01 00:00")
-    end = pd.to_datetime("2019-03-02 00:00")
+    start = pd.to_datetime("2019-03-02 00:00")
+    end = pd.to_datetime("2019-03-03 00:00")
 
     # gens
     gens_df = pd.read_csv(f"inputs/{case}/gens.csv", index_col=0)
@@ -342,7 +342,7 @@ if __name__ == "__main__":
     demand_df = demand_df.reset_index(drop=True)
 
     k_values_df = pd.DataFrame(columns=gens_df.index, index=demand_df.index, data=1.0)
-    opt_gen = 2  # generator that is allowed to bid strategically
+    opt_gen = 1  # generator that is allowed to bid strategically
 
     main_df, supp_df, k_values = find_optimal_k_method_1(
         gens_df=gens_df,
@@ -357,4 +357,5 @@ if __name__ == "__main__":
 
     print(main_df)
     print()
+    print(k_values)
     # %%

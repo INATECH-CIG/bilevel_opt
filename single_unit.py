@@ -6,7 +6,7 @@ import plotly.express as px
 
 # from model_1 import find_optimal_k_method_1 as method_1
 # from model_2 import find_optimal_k_method_2 as method_2
-from model_1_discrete import find_optimal_k_method_1_new as method_1
+from model_1_discrete import find_optimal_k_method_1 as method_1
 from model_2_discrete import find_optimal_k_method_2 as method_2
 from uc_problem import solve_uc_problem
 from utils import calculate_profits, calculate_uplift
@@ -62,7 +62,7 @@ if __name__ == "__main__":
             gens_df, demand_df, k_values_df_1
         )
 
-        prices = pd.concat([main_df_1["mcp"], updated_main_df_1["price"]], axis=1)
+        prices = pd.concat([main_df_1["mcp"], updated_main_df_1["mcp"]], axis=1)
 
         print("Solving using Method 2")
         main_df_2, supp_df_2, k_values_2 = method_2(
@@ -92,7 +92,7 @@ if __name__ == "__main__":
         # print("Merged k values")
         # print(k_values)
 
-        prices = pd.concat([main_df_2["mcp_hat"], updated_main_df_2["price"]], axis=1)
+        prices = pd.concat([main_df_2["mcp_hat"], updated_main_df_2["mcp"]], axis=1)
         power = pd.concat(
             [main_df_2[f"gen_{opt_gen}"], updated_main_df_2[f"gen_{opt_gen}"]], axis=1
         )
@@ -141,22 +141,21 @@ if __name__ == "__main__":
 
     profits_method_1 = calculate_profits(main_df_1, supp_df_1, gens_df)
     updated_profits_method_1 = calculate_profits(
-        updated_main_df_1, updated_supp_df_1, gens_df, price_column="price"
+        updated_main_df_1, updated_supp_df_1, gens_df, price_column="mcp"
     )
     profits_method_2 = calculate_profits(
         main_df_2, supp_df_2, gens_df, price_column="mcp_hat"
     )
     updated_profits_method_2 = calculate_profits(
-        updated_main_df_2, updated_supp_df_2, gens_df, price_column="price"
+        updated_main_df_2, updated_supp_df_2, gens_df, price_column="mcp"
     )
 
     # calculate uplifts
     uplift_method_2, uplift_df_method_2 = calculate_uplift(
-        updated_main_df_2,
-        gens_df,
-        opt_gen,
-        "price",
-        updated_profits_method_2[opt_gen].sum(),
+        main_df=updated_main_df_2,
+        gens_df=gens_df,
+        gen_unit=opt_gen,
+        profits=updated_profits_method_2[opt_gen].sum(),
     )
 
     total_profit_with_uplift_method_2 = (
@@ -205,7 +204,11 @@ if __name__ == "__main__":
             rl_unit_profits[t] -= gens_df.at[opt_gen, "k_up"]
 
     uplift_method_rl, uplift_df_method_rl = calculate_uplift(
-        rl_unit_orders, gens_df, opt_gen, "accepted_price", rl_unit_profits.sum()
+        main_df=rl_unit_orders,
+        gens_df=gens_df,
+        gen_unit=opt_gen,
+        price_column="accepted_price",
+        profits=rl_unit_profits.sum(),
     )
 
     total_profit_with_uplift_method_rl = rl_unit_profits.sum() + uplift_method_rl
@@ -503,7 +506,7 @@ if __name__ == "__main__":
     # also add the price from updated_main_df_2
     fig.add_scatter(
         x=updated_main_df_2.index,
-        y=updated_main_df_2["price"],
+        y=updated_main_df_2["mcp"],
         name="MCP after UC",
     )
     fig.update_xaxes(title_text="Time step")

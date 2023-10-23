@@ -138,9 +138,9 @@ def solve_uc_problem(gens_df, demand_df, k_values_df):
     solver.solve(instance_fixed_u, tee=False)
 
     # get price as dual variable of balance constraint
-    prices = pd.DataFrame(columns=["price"], index=demand_df.index, data=0.0)
+    prices = pd.DataFrame(columns=["mcp"], index=demand_df.index, data=0.0)
     for t in demand_df.index:
-        prices.loc[t, "price"] = -instance_fixed_u.dual[instance_fixed_u.balance[t]]
+        prices.loc[t, "mcp"] = -instance_fixed_u.dual[instance_fixed_u.balance[t]]
 
     # get generation and demand
     generation = pd.DataFrame(

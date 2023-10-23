@@ -15,7 +15,7 @@ def calculate_profits(main_df, supp_df, gens_df, price_column="mcp"):
     return profits
 
 
-def calculate_uplift(main_df, gens_df, gen_unit, price_column, profits):
+def calculate_uplift(main_df, gens_df, gen_unit, profits, price_column="mcp"):
     model = pyo.ConcreteModel()
     # sets
     model.time = pyo.Set(initialize=main_df.index)

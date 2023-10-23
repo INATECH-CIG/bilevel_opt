@@ -4,7 +4,7 @@ import pyomo.environ as pyo
 from pyomo.opt import SolverFactory
 
 
-def find_optimal_k_method_1_new(
+def find_optimal_k_method_1(
     gens_df,
     k_values_df,
     demand_df,
@@ -56,7 +56,7 @@ def find_optimal_k_method_1_new(
             pow(2, k) * model.g_binary[gen, t, k] for k in range(K)
         )
 
-    # model.g_binary_constr = pyo.Constraint(model.gens, model.time, rule=g_binary_rule)
+    model.g_binary_constr = pyo.Constraint(model.gens, model.time, rule=g_binary_rule)
 
     def binary_expansion_1_constr_1_max_rule(model, t, n):
         return model.lambda_[t] - model.lambda_g[t, n] <= model.M * (
@@ -389,11 +389,11 @@ def find_optimal_k_method_1_new(
 if __name__ == "__main__":
     case = "Case_1"
 
-    big_w = 10000  # weight for duality gap objective
-    k_max = 1  # maximum multiplier for strategic bidding
+    big_w = 1000  # weight for duality gap objective
+    k_max = 2  # maximum multiplier for strategic bidding
 
-    start = pd.to_datetime("2019-03-01 00:00")
-    end = pd.to_datetime("2019-03-01 03:00")
+    start = pd.to_datetime("2019-03-02 00:00")
+    end = pd.to_datetime("2019-03-03 00:00")
 
     # gens
     gens_df = pd.read_csv(f"inputs/{case}/gens.csv", index_col=0)
@@ -406,9 +406,9 @@ if __name__ == "__main__":
     demand_df = demand_df.reset_index(drop=True)
 
     k_values_df = pd.DataFrame(columns=gens_df.index, index=demand_df.index, data=1.0)
-    opt_gen = 0  # generator that is allowed to bid strategically
+    opt_gen = 2  # generator that is allowed to bid strategically
 
-    main_df, supp_df, k_values = find_optimal_k_method_1_new(
+    main_df, supp_df, k_values = find_optimal_k_method_1(
         gens_df=gens_df,
         k_values_df=k_values_df,
         demand_df=demand_df,
@@ -421,5 +421,6 @@ if __name__ == "__main__":
 
     print(main_df)
     print()
+    print(k_values)
 
     # %%
