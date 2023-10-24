@@ -514,8 +514,8 @@ if __name__ == "__main__":
     big_w = 1000  # weight for duality gap objective
     k_max = 1  # maximum multiplier for strategic bidding
 
-    start = pd.to_datetime("2019-03-01 00:00")
-    end = pd.to_datetime("2019-03-02 00:00")
+    start = pd.to_datetime("2019-03-02 00:00")
+    end = pd.to_datetime("2019-03-03 00:00")
 
     # gens
     gens_df = pd.read_csv(f"inputs/{case}/gens.csv", index_col=0)

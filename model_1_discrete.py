@@ -272,14 +272,15 @@ def find_optimal_k_method_1(
                 )
                 if i == opt_gen
                 else (
-                    -model.lambda_[t]
+                    k_values_df.at[t, i] * gens_df.at[i, "mc"]
+                    - model.lambda_[t]
                     + model.mu_max[i, t]
                     - model.zeta_min[i, t]
                     + model.pi_u[i, t]
                     - model.pi_u[i, t + 1]
                     - model.pi_d[i, t]
                     + model.pi_d[i, t + 1]
-                    >= -k_values_df.at[t, i] * gens_df.at[i, "mc"]
+                    >= 0
                 )
             )
         if i == opt_gen:
@@ -294,12 +295,13 @@ def find_optimal_k_method_1(
             )
         else:
             return (
-                -model.lambda_[t]
+                k_values_df.at[t, i] * gens_df.at[i, "mc"]
+                - model.lambda_[t]
                 + model.mu_max[i, t]
                 - model.zeta_min[i, t]
                 + model.pi_u[i, t]
                 - model.pi_d[i, t]
-                >= -k_values_df.at[t, i] * gens_df.at[i, "mc"]
+                >= 0
             )
 
     model.gen_dual = pyo.Constraint(model.gens, model.time, rule=gen_dual_rule)

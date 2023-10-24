@@ -314,10 +314,10 @@ if __name__ == "__main__":
     fig.update_layout(showlegend=False)
 
     # save plot as pdf
-    fig.write_image(f"outputs/{case}/profits_{opt_gen}.pdf")
+    # fig.write_image(f"outputs/{case}/profits_{opt_gen}.pdf")
 
     # save plot as html
-    fig.write_html(f"outputs/{case}/profits_{opt_gen}.html")
+    # fig.write_html(f"outputs/{case}/profits_{opt_gen}.html")
     fig.show()
 
     # %% Bids of the unit
@@ -344,9 +344,9 @@ if __name__ == "__main__":
     fig.update_yaxes(title_text="Bid [€/MWh]")
     fig.update_layout(showlegend=True)
     # save plot as html
-    fig.write_html(f"outputs/{case}/bids_{opt_gen}.html")
+    # fig.write_html(f"outputs/{case}/bids_{opt_gen}.html")
     # save plot as pdf
-    fig.write_image(f"outputs/{case}/bids_{opt_gen}.pdf")
+    # fig.write_image(f"outputs/{case}/bids_{opt_gen}.pdf")
     fig.show()
 
     # %% Dispatch of the unit
@@ -376,9 +376,9 @@ if __name__ == "__main__":
     fig.update_layout(showlegend=True)
 
     # save plot as html
-    fig.write_html(f"outputs/{case}/dispatch_{opt_gen}.html")
+    # fig.write_html(f"outputs/{case}/dispatch_{opt_gen}.html")
     # save plot as pdf
-    fig.write_image(f"outputs/{case}/dispatch_{opt_gen}.pdf")
+    # fig.write_image(f"outputs/{case}/dispatch_{opt_gen}.pdf")
     fig.show()
 
     # %% Market clearing price
@@ -409,9 +409,9 @@ if __name__ == "__main__":
     fig.update_yaxes(title_text="MCP [€/MWh]")
     fig.update_layout(showlegend=True)
     # save plot as html
-    fig.write_html(f"outputs/{case}/mcp_{opt_gen}.html")
+    # fig.write_html(f"outputs/{case}/mcp_{opt_gen}.html")
     # save plot as pdf
-    fig.write_image(f"outputs/{case}/mcp_{opt_gen}.pdf")
+    # fig.write_image(f"outputs/{case}/mcp_{opt_gen}.pdf")
     fig.show()
 
     # %%
@@ -439,9 +439,9 @@ if __name__ == "__main__":
     fig.update_xaxes(title_text="Time step")
     fig.update_layout(showlegend=False)
     # save plot as html
-    fig.write_html(f"outputs/{case}/demand.html")
+    # fig.write_html(f"outputs/{case}/demand.html")
     # save plot as pdf
-    fig.write_image(f"outputs/{case}/demand.pdf")
+    # fig.write_image(f"outputs/{case}/demand.pdf")
     fig.show()
 
     # %%
