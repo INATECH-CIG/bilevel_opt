@@ -342,7 +342,7 @@ if __name__ == "__main__":
     demand_df = demand_df.reset_index(drop=True)
 
     k_values_df = pd.DataFrame(columns=gens_df.index, index=demand_df.index, data=1.0)
-    opt_gen = 1  # generator that is allowed to bid strategically
+    opt_gen = 0  # generator that is allowed to bid strategically
 
     main_df, supp_df, k_values = find_optimal_k_method_1(
         gens_df=gens_df,

@@ -18,7 +18,7 @@ if __name__ == "__main__":
 
     big_w = 1000  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
-    time_limit = 30  # time limit in seconds for each optimization
+    time_limit = 60  # time limit in seconds for each optimization
 
     start = pd.to_datetime("2019-03-02 00:00")
     end = pd.to_datetime("2019-03-03 00:00")
@@ -75,6 +75,8 @@ if __name__ == "__main__":
             time_limit=time_limit,
             print_results=print_results,
         )
+
+        # %%
 
         k_values_df_2 = k_values_df.copy()
         k_values_df_2[opt_gen] = k_values_2

@@ -44,23 +44,23 @@ def find_optimal_k_method_1(
     model.psi_max = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
 
     # binary expansion variables
-    model.g_binary = pyo.Var(model.gens, model.time, range(K), within=pyo.Binary)
+    model.g_binary = pyo.Var(model.time, range(K), within=pyo.Binary)
     model.lambda_g = pyo.Var(model.time, range(K), within=pyo.NonNegativeReals)
     model.k_g = pyo.Var(model.time, range(K), within=pyo.NonNegativeReals)
 
     model.M = pyo.Param(initialize=max(gens_df["mc"]) * k_max)
     delta = [gens_df.at[gen, "g_max"] / (pow(2, K) - 1) for gen in gens_df.index]
 
-    def g_binary_rule(model, gen, t):
-        return model.g[gen, t] == delta[gen] * sum(
-            pow(2, k) * model.g_binary[gen, t, k] for k in range(K)
+    def g_binary_rule(model, t):
+        return model.g[opt_gen, t] == delta[opt_gen] * sum(
+            pow(2, k) * model.g_binary[t, k] for k in range(K)
         )
 
-    model.g_binary_constr = pyo.Constraint(model.gens, model.time, rule=g_binary_rule)
+    model.g_binary_constr = pyo.Constraint(model.time, rule=g_binary_rule)
 
     def binary_expansion_1_constr_1_max_rule(model, t, n):
         return model.lambda_[t] - model.lambda_g[t, n] <= model.M * (
-            1 - model.g_binary[opt_gen, t, n]
+            1 - model.g_binary[t, n]
         )
 
     model.binary_expansion_1_constr_1_max = pyo.Constraint(
@@ -75,7 +75,7 @@ def find_optimal_k_method_1(
     )
 
     def binary_expansion_1_constr_2_rule(model, t, n):
-        return model.lambda_g[t, n] <= model.M * model.g_binary[opt_gen, t, n]
+        return model.lambda_g[t, n] <= model.M * model.g_binary[t, n]
 
     model.binary_expansion_1_constr_2 = pyo.Constraint(
         model.time, range(K), rule=binary_expansion_1_constr_2_rule
@@ -83,7 +83,7 @@ def find_optimal_k_method_1(
 
     def binary_expansion_2_constr_1_max_rule(model, t, n):
         return model.k[t] - model.k_g[t, n] <= model.M * (
-            1 - model.g_binary[opt_gen, t, n]
+            1 - model.g_binary[t, n]
         )
 
     model.binary_expansion_2_constr_1_max = pyo.Constraint(
@@ -98,7 +98,7 @@ def find_optimal_k_method_1(
     )
 
     def binary_expansion_2_constr_2_rule(model, t, n):
-        return model.k_g[t, n] <= model.M * model.g_binary[opt_gen, t, n]
+        return model.k_g[t, n] <= model.M * model.g_binary[t, n]
 
     model.binary_expansion_2_constr_2 = pyo.Constraint(
         model.time, range(K), rule=binary_expansion_2_constr_2_rule
@@ -408,7 +408,7 @@ if __name__ == "__main__":
     demand_df = demand_df.reset_index(drop=True)
 
     k_values_df = pd.DataFrame(columns=gens_df.index, index=demand_df.index, data=1.0)
-    opt_gen = 2  # generator that is allowed to bid strategically
+    opt_gen = 0  # generator that is allowed to bid strategically
 
     main_df, supp_df, k_values = find_optimal_k_method_1(
         gens_df=gens_df,
@@ -417,8 +417,9 @@ if __name__ == "__main__":
         k_max=k_max,
         opt_gen=opt_gen,
         big_w=big_w,
-        time_limit=10,
+        time_limit=60,
         print_results=True,
+        K=5,
     )
 
     print(main_df)
