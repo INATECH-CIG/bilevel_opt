@@ -13,8 +13,6 @@ def find_optimal_k_method_2(
     big_w=10000,
     time_limit=60,
     print_results=False,
-    K=5,
-    big_M=10e6,
 ):
     model = pyo.ConcreteModel()
 
@@ -57,6 +55,7 @@ def find_optimal_k_method_2(
     model.sigma_u_hat = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
     model.sigma_d_hat = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
 
+    # objective rules
     def primary_objective_rule(model):
         return sum(
             model.lambda_hat[t] * model.g[opt_gen, t]
@@ -364,290 +363,122 @@ def find_optimal_k_method_2(
     )
 
     # Complementary slackness conditions
-    model.mu_max_hat_binary = pyo.Var(model.gens, model.time, within=pyo.Binary)
-
-    def mu_max_hat_binary_rule_1(model, i, t):
-        return (model.g[i, t] - gens_df.at[i, "g_max"] * model.u[i, t]) <= max(
-            gens_df["g_max"]
-        ) * (1 - model.mu_max_hat_binary[i, t])
-
-    def mu_max_hat_binary_rule_2(model, i, t):
-        return (model.g[i, t] - gens_df.at[i, "g_max"] * model.u[i, t]) >= -max(
-            gens_df["g_max"]
-        ) * (1 - model.mu_max_hat_binary[i, t])
-
-    def mu_max_hat_binary_rule_3(model, i, t):
-        return model.mu_max_hat[i, t] <= big_M * model.mu_max_hat_binary[i, t]
-
-    model.mu_max_hat_binary_constr_1 = pyo.Constraint(
-        model.gens, model.time, rule=mu_max_hat_binary_rule_1
-    )
-    model.mu_max_hat_binary_constr_2 = pyo.Constraint(
-        model.gens, model.time, rule=mu_max_hat_binary_rule_2
-    )
-    model.mu_max_hat_binary_constr_3 = pyo.Constraint(
-        model.gens, model.time, rule=mu_max_hat_binary_rule_3
-    )
-
-    model.mu_min_hat_binary = pyo.Var(model.gens, model.time, within=pyo.Binary)
-
-    def mu_min_hat_binary_rule_1(model, i, t):
-        return gens_df.at[i, "g_min"] * model.u[i, t] - model.g[i, t] <= max(
-            gens_df["g_max"]
-        ) * (1 - model.mu_min_hat_binary[i, t])
-
-    def mu_min_hat_binary_rule_2(model, i, t):
-        return gens_df.at[i, "g_min"] * model.u[i, t] - model.g[i, t] >= -max(
-            gens_df["g_max"]
-        ) * (1 - model.mu_min_hat_binary[i, t])
-
-    def mu_min_hat_binary_rule_3(model, i, t):
-        return model.mu_min_hat[i, t] <= big_M * model.mu_min_hat_binary[i, t]
-
-    model.mu_min_hat_binary_constr_1 = pyo.Constraint(
-        model.gens, model.time, rule=mu_min_hat_binary_rule_1
-    )
-    model.mu_min_hat_binary_constr_2 = pyo.Constraint(
-        model.gens, model.time, rule=mu_min_hat_binary_rule_2
-    )
-    model.mu_min_hat_binary_constr_3 = pyo.Constraint(
-        model.gens, model.time, rule=mu_min_hat_binary_rule_3
-    )
-
-    model.nu_max_hat_binary = pyo.Var(model.time, within=pyo.Binary)
-
-    def nu_max_hat_binary_rule_1(model, t):
-        return model.d[t] - demand_df.at[t, "volume"] <= max(demand_df["volume"]) * (
-            1 - model.nu_max_hat_binary[t]
+    def g_max_cs_rule(model, i, t):
+        return (
+            model.mu_max_hat[i, t]
+            * (model.g[i, t] - gens_df.at[i, "g_max"] * model.u[i, t])
+            == 0
         )
 
-    def nu_max_hat_binary_rule_2(model, t):
-        return model.d[t] - demand_df.at[t, "volume"] >= -max(demand_df["volume"]) * (
-            1 - model.nu_max_hat_binary[t]
+    model.g_max_cs = pyo.Constraint(model.gens, model.time, rule=g_max_cs_rule)
+
+    def g_min_cs_rule(model, i, t):
+        return (
+            model.mu_min_hat[i, t]
+            * (gens_df.at[i, "g_min"] * model.u[i, t] - model.g[i, t])
+            == 0
         )
 
-    def nu_max_hat_binary_rule_3(model, t):
-        return model.nu_max_hat[t] <= big_M * model.nu_max_hat_binary[t]
+    model.g_min_cs = pyo.Constraint(model.gens, model.time, rule=g_min_cs_rule)
 
-    model.nu_max_hat_binary_constr_1 = pyo.Constraint(
-        model.time, rule=nu_max_hat_binary_rule_1
-    )
-    model.nu_max_hat_binary_constr_2 = pyo.Constraint(
-        model.time, rule=nu_max_hat_binary_rule_2
-    )
-    model.nu_max_hat_binary_constr_3 = pyo.Constraint(
-        model.time, rule=nu_max_hat_binary_rule_3
-    )
+    def d_max_cs_rule(model, t):
+        return model.nu_max_hat[t] * (model.d[t] - demand_df.at[t, "volume"]) == 0
 
-    model.nu_min_hat_binary = pyo.Var(model.time, within=pyo.Binary)
+    model.d_max_cs = pyo.Constraint(model.time, rule=d_max_cs_rule)
 
-    def nu_min_hat_binary_rule_1(model, t):
-        return model.d[t] <= max(demand_df["volume"]) * (1 - model.nu_min_hat_binary[t])
+    def d_min_cs_rule(model, t):
+        return model.nu_min_hat[t] * model.d[t] == 0
 
-    def nu_min_hat_binary_rule_2(model, t):
-        return model.d[t] >= -max(demand_df["volume"]) * (
-            1 - model.nu_min_hat_binary[t]
-        )
+    model.d_min_cs = pyo.Constraint(model.time, rule=d_min_cs_rule)
 
-    def nu_min_hat_binary_rule_3(model, t):
-        return model.nu_min_hat[t] <= big_M * model.nu_min_hat_binary[t]
-
-    model.nu_min_hat_binary_constr_1 = pyo.Constraint(
-        model.time, rule=nu_min_hat_binary_rule_1
-    )
-    model.nu_min_hat_binary_constr_2 = pyo.Constraint(
-        model.time, rule=nu_min_hat_binary_rule_2
-    )
-    model.nu_min_hat_binary_constr_3 = pyo.Constraint(
-        model.time, rule=nu_min_hat_binary_rule_3
-    )
-
-    model.pi_u_hat_binary = pyo.Var(model.gens, model.time, within=pyo.Binary)
-
-    def pi_u_hat_binary_rule_1(model, i, t):
+    def ru_max_cs_rule(model, i, t):
         if t == 0:
-            return model.g[i, t] - gens_df.at[i, "g_0"] - gens_df.at[
-                i, "r_up"
-            ] <= big_M * (1 - model.pi_u_hat_binary[i, t])
-        else:
-            return model.g[i, t] - model.g[i, t - 1] - gens_df.at[
-                i, "r_up"
-            ] <= big_M * (1 - model.pi_u_hat_binary[i, t])
-
-    def pi_u_hat_binary_rule_2(model, i, t):
-        if t == 0:
-            return model.g[i, t] - gens_df.at[i, "g_0"] - gens_df.at[
-                i, "r_up"
-            ] >= -big_M * (1 - model.pi_u_hat_binary[i, t])
-        else:
-            return model.g[i, t] - model.g[i, t - 1] - gens_df.at[
-                i, "r_up"
-            ] >= -big_M * (1 - model.pi_u_hat_binary[i, t])
-
-    def pi_u_hat_binary_rule_3(model, i, t):
-        return model.pi_u_hat[i, t] <= big_M * model.pi_u_hat_binary[i, t]
-
-    model.pi_u_hat_binary_constr_1 = pyo.Constraint(
-        model.gens, model.time, rule=pi_u_hat_binary_rule_1
-    )
-    model.pi_u_hat_binary_constr_2 = pyo.Constraint(
-        model.gens, model.time, rule=pi_u_hat_binary_rule_2
-    )
-    model.pi_u_hat_binary_constr_3 = pyo.Constraint(
-        model.gens, model.time, rule=pi_u_hat_binary_rule_3
-    )
-
-    model.pi_d_hat_binary = pyo.Var(model.gens, model.time, within=pyo.Binary)
-
-    def pi_d_hat_binary_rule_1(model, i, t):
-        if t == 0:
-            return gens_df.at[i, "g_0"] - model.g[i, t] - gens_df.at[
-                i, "r_down"
-            ] <= big_M * (1 - model.pi_d_hat_binary[i, t])
-        else:
-            return model.g[i, t - 1] - model.g[i, t] - gens_df.at[
-                i, "r_down"
-            ] <= big_M * (1 - model.pi_d_hat_binary[i, t])
-
-    def pi_d_hat_binary_rule_2(model, i, t):
-        if t == 0:
-            return gens_df.at[i, "g_0"] - model.g[i, t] - gens_df.at[
-                i, "r_down"
-            ] >= -big_M * (1 - model.pi_d_hat_binary[i, t])
-        else:
-            return model.g[i, t - 1] - model.g[i, t] - gens_df.at[
-                i, "r_down"
-            ] >= -big_M * (1 - model.pi_d_hat_binary[i, t])
-
-    def pi_d_hat_binary_rule_3(model, i, t):
-        return model.pi_d_hat[i, t] <= big_M * model.pi_d_hat_binary[i, t]
-
-    model.pi_d_hat_binary_constr_1 = pyo.Constraint(
-        model.gens, model.time, rule=pi_d_hat_binary_rule_1
-    )
-    model.pi_d_hat_binary_constr_2 = pyo.Constraint(
-        model.gens, model.time, rule=pi_d_hat_binary_rule_2
-    )
-    model.pi_d_hat_binary_constr_3 = pyo.Constraint(
-        model.gens, model.time, rule=pi_d_hat_binary_rule_3
-    )
-
-    model.sigma_u_hat_binary = pyo.Var(model.gens, model.time, within=pyo.Binary)
-
-    def sigma_u_hat_binary_rule_1(model, i, t):
-        if t == 0:
-            return model.c_up[i, t] - (
-                model.u[i, t] - gens_df.at[i, "u_0"]
-            ) * gens_df.at[i, "k_up"] <= max(gens_df["k_up"]) * (
-                1 - model.sigma_u_hat_binary[i, t]
+            return (
+                model.pi_u_hat[i, t]
+                * (model.g[i, t] - gens_df.at[i, "g_0"] - gens_df.at[i, "r_up"])
+                == 0
             )
         else:
-            return model.c_up[i, t] - (model.u[i, t] - model.u[i, t - 1]) * gens_df.at[
-                i, "k_up"
-            ] <= max(gens_df["k_up"]) * (1 - model.sigma_u_hat_binary[i, t])
+            return (
+                model.pi_u_hat[i, t]
+                * (model.g[i, t] - model.g[i, t - 1] - gens_df.at[i, "r_up"])
+                == 0
+            )
 
-    def sigma_u_hat_binary_rule_2(model, i, t):
+    model.ru_max_cs = pyo.Constraint(model.gens, model.time, rule=ru_max_cs_rule)
+
+    def rd_max_cs_rule(model, i, t):
         if t == 0:
-            return model.c_up[i, t] - (
-                model.u[i, t] - gens_df.at[i, "u_0"]
-            ) * gens_df.at[i, "k_up"] >= -max(gens_df["k_up"]) * (
-                1 - model.sigma_u_hat_binary[i, t]
+            return (
+                model.pi_d_hat[i, t]
+                * (gens_df.at[i, "g_0"] - model.g[i, t] - gens_df.at[i, "r_down"])
+                == 0
             )
         else:
-            return model.c_up[i, t] - (model.u[i, t] - model.u[i, t - 1]) * gens_df.at[
-                i, "k_up"
-            ] >= -max(gens_df["k_up"]) * (1 - model.sigma_u_hat_binary[i, t])
+            return (
+                model.pi_d_hat[i, t]
+                * (model.g[i, t - 1] - model.g[i, t] - gens_df.at[i, "r_down"])
+                == 0
+            )
 
-    def sigma_u_hat_binary_rule_3(model, i, t):
-        return model.sigma_u_hat[i, t] <= big_M * model.sigma_u_hat_binary[i, t]
+    model.rd_max_cs = pyo.Constraint(model.gens, model.time, rule=rd_max_cs_rule)
 
-    model.sigma_u_hat_binary_constr_1 = pyo.Constraint(
-        model.gens, model.time, rule=sigma_u_hat_binary_rule_1
-    )
-    model.sigma_u_hat_binary_constr_2 = pyo.Constraint(
-        model.gens, model.time, rule=sigma_u_hat_binary_rule_2
-    )
-    model.sigma_u_hat_binary_constr_3 = pyo.Constraint(
-        model.gens, model.time, rule=sigma_u_hat_binary_rule_3
-    )
-
-    model.ro_u_hat_binary = pyo.Var(model.gens, model.time, within=pyo.Binary)
-
-    def ro_u_hat_binary_rule_1(model, i, t):
-        return model.c_up[i, t] <= big_M * (1 - model.ro_u_hat_binary[i, t])
-
-    def ro_u_hat_binary_rule_2(model, i, t):
-        return model.c_up[i, t] >= -big_M * (1 - model.ro_u_hat_binary[i, t])
-
-    def ro_u_hat_binary_rule_3(model, i, t):
-        return model.ro_u_hat[i, t] <= big_M * model.ro_u_hat_binary[i, t]
-
-    model.ro_u_hat_binary_constr_1 = pyo.Constraint(
-        model.gens, model.time, rule=ro_u_hat_binary_rule_1
-    )
-
-    model.sigma_d_hat_binary = pyo.Var(model.gens, model.time, within=pyo.Binary)
-
-    def sigma_d_hat_binary_rule_1(model, i, t):
+    def start_up_cs_rule_1(model, i, t):
         if t == 0:
-            return model.c_down[i, t] - (
-                gens_df.at[i, "u_0"] - model.u[i, t]
-            ) * gens_df.at[i, "k_down"] <= max(gens_df["k_down"]) * (
-                1 - model.sigma_d_hat_binary[i, t]
+            return (
+                model.sigma_u_hat[i, t]
+                * (
+                    model.c_up[i, t]
+                    - (model.u[i, t] - gens_df.at[i, "u_0"]) * gens_df.at[i, "k_up"]
+                )
+                == 0
             )
         else:
-            return model.c_down[i, t] - (
-                model.u[i, t - 1] - model.u[i, t]
-            ) * gens_df.at[i, "k_down"] <= max(gens_df["k_down"]) * (
-                1 - model.sigma_d_hat_binary[i, t]
+            return (
+                model.sigma_u_hat[i, t]
+                * (
+                    model.c_up[i, t]
+                    - (model.u[i, t] - model.u[i, t - 1]) * gens_df.at[i, "k_up"]
+                )
+                == 0
             )
 
-    def sigma_d_hat_binary_rule_2(model, i, t):
+    def start_up_cs_rule_2(model, i, t):
+        return model.ro_u_hat[i, t] * model.c_up[i, t] == 0
+
+    model.start_up_cs = pyo.Constraint(model.gens, model.time, rule=start_up_cs_rule_1)
+    model.start_up_cs_2 = pyo.Constraint(
+        model.gens, model.time, rule=start_up_cs_rule_2
+    )
+
+    def shut_down_cs_rule_1(model, i, t):
         if t == 0:
-            return model.c_down[i, t] - (
-                gens_df.at[i, "u_0"] - model.u[i, t]
-            ) * gens_df.at[i, "k_down"] >= -max(gens_df["k_down"]) * (
-                1 - model.sigma_d_hat_binary[i, t]
+            return (
+                model.sigma_d_hat[i, t]
+                * (
+                    model.c_down[i, t]
+                    - (gens_df.at[i, "u_0"] - model.u[i, t]) * gens_df.at[i, "k_down"]
+                )
+                == 0
             )
         else:
-            return model.c_down[i, t] - (
-                model.u[i, t - 1] - model.u[i, t]
-            ) * gens_df.at[i, "k_down"] >= -max(gens_df["k_down"]) * (
-                1 - model.sigma_d_hat_binary[i, t]
+            return (
+                model.sigma_d_hat[i, t]
+                * (
+                    model.c_down[i, t]
+                    - (model.u[i, t - 1] - model.u[i, t]) * gens_df.at[i, "k_down"]
+                )
+                == 0
             )
 
-    def sigma_d_hat_binary_rule_3(model, i, t):
-        return model.sigma_d_hat[i, t] <= big_M * model.sigma_d_hat_binary[i, t]
+    def shut_down_cs_rule_2(model, i, t):
+        return model.ro_d_hat[i, t] * model.c_down[i, t] == 0
 
-    model.sigma_d_hat_binary_constr_1 = pyo.Constraint(
-        model.gens, model.time, rule=sigma_d_hat_binary_rule_1
+    model.shut_down_cs = pyo.Constraint(
+        model.gens, model.time, rule=shut_down_cs_rule_1
     )
-    model.sigma_d_hat_binary_constr_2 = pyo.Constraint(
-        model.gens, model.time, rule=sigma_d_hat_binary_rule_2
-    )
-    model.sigma_d_hat_binary_constr_3 = pyo.Constraint(
-        model.gens, model.time, rule=sigma_d_hat_binary_rule_3
-    )
-
-    model.ro_d_hat_binary = pyo.Var(model.gens, model.time, within=pyo.Binary)
-
-    def ro_d_hat_binary_rule_1(model, i, t):
-        return model.c_down[i, t] <= big_M * (1 - model.ro_d_hat_binary[i, t])
-
-    def ro_d_hat_binary_rule_2(model, i, t):
-        return model.c_down[i, t] >= -big_M * (1 - model.ro_d_hat_binary[i, t])
-
-    def ro_d_hat_binary_rule_3(model, i, t):
-        return model.ro_d_hat[i, t] <= big_M * model.ro_d_hat_binary[i, t]
-
-    model.ro_d_hat_binary_constr_1 = pyo.Constraint(
-        model.gens, model.time, rule=ro_d_hat_binary_rule_1
-    )
-    model.ro_d_hat_binary_constr_2 = pyo.Constraint(
-        model.gens, model.time, rule=ro_d_hat_binary_rule_2
-    )
-    model.ro_d_hat_binary_constr_3 = pyo.Constraint(
-        model.gens, model.time, rule=ro_d_hat_binary_rule_3
+    model.shut_down_cs_2 = pyo.Constraint(
+        model.gens, model.time, rule=shut_down_cs_rule_2
     )
 
     # solve
@@ -736,9 +567,8 @@ if __name__ == "__main__":
         k_max=k_max,
         opt_gen=opt_gen,
         big_w=big_w,
-        time_limit=180,
+        time_limit=60,
         print_results=True,
-        K=5,
     )
 
     print(main_df)
