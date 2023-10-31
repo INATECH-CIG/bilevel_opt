@@ -11,9 +11,9 @@ def find_optimal_k_method_1(
     k_max,
     opt_gen,
     big_w=10000,
-    K=5,
     time_limit=60,
     print_results=False,
+    K=5,
 ):
     model = pyo.ConcreteModel()
 
@@ -26,14 +26,14 @@ def find_optimal_k_method_1(
     model.d = pyo.Var(model.time, within=pyo.NonNegativeReals)
     model.c_up = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
     model.c_down = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
-    model.k = pyo.Var(model.time, bounds=(1, k_max))
+    model.k = pyo.Var(model.time, bounds=(1, k_max), within=pyo.NonNegativeReals)
     model.lambda_ = pyo.Var(model.time, within=pyo.Reals, bounds=(-500, 3000))
     model.u = pyo.Var(model.gens, model.time, within=pyo.Binary)
 
     # secondary variables
     model.mu_max = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
+    model.mu_min = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
     model.nu_max = pyo.Var(model.time, within=pyo.NonNegativeReals)
-    model.zeta_min = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
 
     model.pi_u = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
     model.pi_d = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
@@ -45,12 +45,13 @@ def find_optimal_k_method_1(
 
     # binary expansion variables
     model.g_binary = pyo.Var(model.time, range(K), within=pyo.Binary)
-    model.lambda_g = pyo.Var(model.time, range(K), within=pyo.NonNegativeReals)
-    model.k_g = pyo.Var(model.time, range(K), within=pyo.NonNegativeReals)
+    model.z_lambda = pyo.Var(model.time, range(K), within=pyo.NonNegativeReals)
+    model.z_k = pyo.Var(model.time, range(K), within=pyo.NonNegativeReals)
 
     model.M = pyo.Param(initialize=max(gens_df["mc"]) * k_max)
     delta = [gens_df.at[gen, "g_max"] / (pow(2, K) - 1) for gen in gens_df.index]
 
+    # binary expansion constraints
     def g_binary_rule(model, t):
         return model.g[opt_gen, t] == delta[opt_gen] * sum(
             pow(2, k) * model.g_binary[t, k] for k in range(K)
@@ -58,48 +59,54 @@ def find_optimal_k_method_1(
 
     model.g_binary_constr = pyo.Constraint(model.time, rule=g_binary_rule)
 
+    def binary_expansion_1_rule(model, t, n):
+        return model.z_lambda[t, n] == model.lambda_[t] * model.g_binary[t, n]
+
     def binary_expansion_1_constr_1_max_rule(model, t, n):
-        return model.lambda_[t] - model.lambda_g[t, n] <= model.M * (
+        return model.lambda_[t] - model.z_lambda[t, n] <= model.M * (
             1 - model.g_binary[t, n]
         )
 
+    def binary_expansion_1_constr_1_min_rule(model, t, n):
+        return model.lambda_[t] - model.z_lambda[t, n] >= 0
+
+    def binary_expansion_1_constr_2_rule(model, t, n):
+        return model.z_lambda[t, n] <= model.M * model.g_binary[t, n]
+
+    model.binary_expansion_1_constr = pyo.Constraint(
+        model.time, range(K), rule=binary_expansion_1_rule
+    )
     model.binary_expansion_1_constr_1_max = pyo.Constraint(
         model.time, range(K), rule=binary_expansion_1_constr_1_max_rule
     )
-
-    def binary_expansion_1_constr_1_min_rule(model, t, n):
-        return model.lambda_[t] - model.lambda_g[t, n] >= 0
-
     model.binary_expansion_1_constr_1_min = pyo.Constraint(
         model.time, range(K), rule=binary_expansion_1_constr_1_min_rule
     )
-
-    def binary_expansion_1_constr_2_rule(model, t, n):
-        return model.lambda_g[t, n] <= model.M * model.g_binary[t, n]
-
     model.binary_expansion_1_constr_2 = pyo.Constraint(
         model.time, range(K), rule=binary_expansion_1_constr_2_rule
     )
 
-    def binary_expansion_2_constr_1_max_rule(model, t, n):
-        return model.k[t] - model.k_g[t, n] <= model.M * (
-            1 - model.g_binary[t, n]
-        )
+    def binary_expansion_2_rule(model, t, n):
+        return model.z_k[t, n] == model.k[t] * model.g_binary[t, n]
 
+    def binary_expansion_2_constr_1_max_rule(model, t, n):
+        return model.k[t] - model.z_k[t, n] <= model.M * (1 - model.g_binary[t, n])
+
+    def binary_expansion_2_constr_1_min_rule(model, t, n):
+        return model.k[t] - model.z_k[t, n] >= 0
+
+    def binary_expansion_2_constr_2_rule(model, t, n):
+        return model.z_k[t, n] <= model.M * model.g_binary[t, n]
+
+    model.binary_expansion_2_constr = pyo.Constraint(
+        model.time, range(K), rule=binary_expansion_2_rule
+    )
     model.binary_expansion_2_constr_1_max = pyo.Constraint(
         model.time, range(K), rule=binary_expansion_2_constr_1_max_rule
     )
-
-    def binary_expansion_2_constr_1_min_rule(model, t, n):
-        return model.k[t] - model.k_g[t, n] >= 0
-
     model.binary_expansion_2_constr_1_min = pyo.Constraint(
         model.time, range(K), rule=binary_expansion_2_constr_1_min_rule
     )
-
-    def binary_expansion_2_constr_2_rule(model, t, n):
-        return model.k_g[t, n] <= model.M * model.g_binary[t, n]
-
     model.binary_expansion_2_constr_2 = pyo.Constraint(
         model.time, range(K), rule=binary_expansion_2_constr_2_rule
     )
@@ -107,8 +114,9 @@ def find_optimal_k_method_1(
     # objective rules
     def primary_objective_rule(model):
         return sum(
-            delta[opt_gen] * sum(pow(2, n) * model.lambda_g[t, n] for n in range(K))
+            delta[opt_gen] * sum(pow(2, n) * model.z_lambda[t, n] for n in range(K))
             - gens_df.at[opt_gen, "mc"] * model.g[opt_gen, t]
+            - gens_df.at[opt_gen, "f"] * model.u[opt_gen, t]
             - model.c_up[opt_gen, t]
             - model.c_down[opt_gen, t]
             for t in model.time
@@ -119,7 +127,7 @@ def find_optimal_k_method_1(
             (
                 gens_df.at[gen, "mc"]
                 * delta[gen]
-                * sum(pow(2, n) * model.k_g[t, n] for n in range(K))
+                * sum(pow(2, n) * model.z_k[t, n] for n in range(K))
                 + gens_df.at[gen, "f"] * model.u[gen, t]
                 + model.c_up[gen, t]
                 + model.c_down[gen, t]
@@ -138,38 +146,37 @@ def find_optimal_k_method_1(
         return expr
 
     def duality_gap_part_2_rule(model):
-        expr = sum(model.nu_max[t] * demand_df.at[t, "volume"] for t in model.time)
+        expr = -sum(model.nu_max[t] * demand_df.at[t, "volume"] for t in model.time)
 
-        expr += sum(
+        expr -= sum(
             model.pi_u[i, t] * gens_df.at[i, "r_up"]
             for i in model.gens
             for t in model.time
         )
 
-        expr += sum(
+        expr -= sum(
             model.pi_d[i, t] * gens_df.at[i, "r_down"]
             for i in model.gens
             for t in model.time
         )
 
-        expr += sum(model.pi_u[i, 0] * gens_df.at[i, "g_0"] for i in model.gens)
+        expr -= sum(model.pi_u[i, 0] * gens_df.at[i, "g_0"] for i in model.gens)
 
-        expr -= sum(model.pi_d[i, 0] * gens_df.at[i, "g_0"] for i in model.gens)
+        expr += sum(model.pi_d[i, 0] * gens_df.at[i, "g_0"] for i in model.gens)
 
-        for t in model.time:
-            if t == 0:
-                continue
-            expr += sum(
-                model.sigma_u[i, t] * gens_df.at[i, "k_up"] * gens_df.at[i, "u_0"]
-                - model.sigma_d[i, t] * gens_df.at[i, "k_down"] * gens_df.at[i, "u_0"]
-                for i in model.gens
-            )
-
-        expr += pyo.quicksum(
-            model.psi_max[i, t] for i in model.gens for t in model.time
+        expr -= sum(
+            model.sigma_u[i, 0] * gens_df.at[i, "k_up"] * gens_df.at[i, "u_0"]
+            for i in model.gens
         )
 
-        return -expr
+        expr += sum(
+            model.sigma_d[i, 0] * gens_df.at[i, "k_down"] * gens_df.at[i, "u_0"]
+            for i in model.gens
+        )
+
+        expr -= sum(model.psi_max[i, t] for i in model.gens for t in model.time)
+
+        return expr
 
     def final_objective_rule(model):
         return primary_objective_rule(model) - big_w * (
@@ -263,7 +270,7 @@ def find_optimal_k_method_1(
                     model.k[t] * gens_df.at[i, "mc"]
                     - model.lambda_[t]
                     + model.mu_max[i, t]
-                    - model.zeta_min[i, t]
+                    - model.mu_min[i, t]
                     + model.pi_u[i, t]
                     - model.pi_u[i, t + 1]
                     - model.pi_d[i, t]
@@ -275,7 +282,7 @@ def find_optimal_k_method_1(
                     k_values_df.at[t, i] * gens_df.at[i, "mc"]
                     - model.lambda_[t]
                     + model.mu_max[i, t]
-                    - model.zeta_min[i, t]
+                    - model.mu_min[i, t]
                     + model.pi_u[i, t]
                     - model.pi_u[i, t + 1]
                     - model.pi_d[i, t]
@@ -288,7 +295,7 @@ def find_optimal_k_method_1(
                 model.k[t] * gens_df.at[i, "mc"]
                 - model.lambda_[t]
                 + model.mu_max[i, t]
-                - model.zeta_min[i, t]
+                - model.mu_min[i, t]
                 + model.pi_u[i, t]
                 - model.pi_d[i, t]
                 >= 0
@@ -298,7 +305,7 @@ def find_optimal_k_method_1(
                 k_values_df.at[t, i] * gens_df.at[i, "mc"]
                 - model.lambda_[t]
                 + model.mu_max[i, t]
-                - model.zeta_min[i, t]
+                - model.mu_min[i, t]
                 + model.pi_u[i, t]
                 - model.pi_d[i, t]
                 >= 0
@@ -309,29 +316,31 @@ def find_optimal_k_method_1(
     def status_dual_rule(model, i, t):
         if t != model.time.at(-1):
             return (
-                -model.mu_max[i, t] * gens_df.at[i, "g_max"]
-                + model.zeta_min[i, t] * gens_df.at[i, "g_min"]
+                gens_df.at[i, "f"]
+                - model.mu_max[i, t] * gens_df.at[i, "g_max"]
+                + model.mu_min[i, t] * gens_df.at[i, "g_min"]
                 + (model.sigma_u[i, t] - model.sigma_u[i, t + 1])
                 * gens_df.at[i, "k_up"]
                 - (model.sigma_d[i, t] - model.sigma_d[i, t + 1])
                 * gens_df.at[i, "k_down"]
                 + model.psi_max[i, t]
-                >= -gens_df.at[i, "f"]
+                >= 0
             )
         else:
             return (
-                -model.mu_max[i, t] * gens_df.at[i, "g_max"]
-                + model.zeta_min[i, t] * gens_df.at[i, "g_min"]
+                gens_df.at[i, "f"]
+                - model.mu_max[i, t] * gens_df.at[i, "g_max"]
+                + model.mu_min[i, t] * gens_df.at[i, "g_min"]
                 + model.sigma_u[i, t] * gens_df.at[i, "k_up"]
                 - model.sigma_d[i, t] * gens_df.at[i, "k_down"]
                 + model.psi_max[i, t]
-                >= -gens_df.at[i, "f"]
+                >= 0
             )
 
     model.status_dual = pyo.Constraint(model.gens, model.time, rule=status_dual_rule)
 
     def demand_dual_rule(model, t):
-        return model.lambda_[t] + model.nu_max[t] >= demand_df.at[t, "price"]
+        return -demand_df.at[t, "price"] + model.lambda_[t] + model.nu_max[t] >= 0
 
     model.demand_dual = pyo.Constraint(model.time, rule=demand_dual_rule)
 
@@ -408,7 +417,7 @@ if __name__ == "__main__":
     demand_df = demand_df.reset_index(drop=True)
 
     k_values_df = pd.DataFrame(columns=gens_df.index, index=demand_df.index, data=1.0)
-    opt_gen = 0  # generator that is allowed to bid strategically
+    opt_gen = 2  # generator that is allowed to bid strategically
 
     main_df, supp_df, k_values = find_optimal_k_method_1(
         gens_df=gens_df,
@@ -417,13 +426,12 @@ if __name__ == "__main__":
         k_max=k_max,
         opt_gen=opt_gen,
         big_w=big_w,
-        time_limit=60,
+        time_limit=10,
         print_results=True,
-        K=5,
+        K=10,
     )
 
     print(main_df)
     print()
     print(k_values)
-
     # %%

@@ -25,14 +25,14 @@ def find_optimal_k_method_2(
     model.d = pyo.Var(model.time, within=pyo.NonNegativeReals)
     model.c_up = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
     model.c_down = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
-    model.k = pyo.Var(model.time, bounds=(1, k_max))
+    model.k = pyo.Var(model.time, bounds=(1, k_max), within=pyo.NonNegativeReals)
     model.lambda_ = pyo.Var(model.time, within=pyo.Reals, bounds=(-500, 3000))
     model.u = pyo.Var(model.gens, model.time, within=pyo.Binary)
 
     # secondary variables
     model.mu_max = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
+    model.mu_min = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
     model.nu_max = pyo.Var(model.time, within=pyo.NonNegativeReals)
-    model.zeta_min = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
 
     model.pi_u = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
     model.pi_d = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
@@ -45,21 +45,22 @@ def find_optimal_k_method_2(
     # duals of LP relaxation
     model.lambda_hat = pyo.Var(model.time, within=pyo.Reals, bounds=(-500, 3000))
     model.mu_max_hat = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
+    model.mu_min_hat = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
     model.nu_max_hat = pyo.Var(model.time, within=pyo.NonNegativeReals)
     model.nu_min_hat = pyo.Var(model.time, within=pyo.NonNegativeReals)
-    model.zeta_min_hat = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
-
     model.pi_u_hat = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
     model.pi_d_hat = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
-
-    model.sigma_u_hat = pyo.Var(model.gens, model.time, bounds=(0, 1), within=pyo.Reals)
-    model.sigma_d_hat = pyo.Var(model.gens, model.time, bounds=(0, 1), within=pyo.Reals)
+    model.ro_u_hat = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
+    model.ro_d_hat = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
+    model.sigma_u_hat = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
+    model.sigma_d_hat = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
 
     # objective rules
     def primary_objective_rule(model):
         return sum(
             model.lambda_hat[t] * model.g[opt_gen, t]
             - gens_df.at[opt_gen, "mc"] * model.g[opt_gen, t]
+            - gens_df.at[opt_gen, "f"] * model.u[opt_gen, t]
             - model.c_up[opt_gen, t]
             - model.c_down[opt_gen, t]
             for t in model.time
@@ -87,38 +88,37 @@ def find_optimal_k_method_2(
         return expr
 
     def duality_gap_part_2_rule(model):
-        expr = sum(model.nu_max[t] * demand_df.at[t, "volume"] for t in model.time)
+        expr = -sum(model.nu_max[t] * demand_df.at[t, "volume"] for t in model.time)
 
-        expr += sum(
+        expr -= sum(
             model.pi_u[i, t] * gens_df.at[i, "r_up"]
             for i in model.gens
             for t in model.time
         )
 
-        expr += sum(
+        expr -= sum(
             model.pi_d[i, t] * gens_df.at[i, "r_down"]
             for i in model.gens
             for t in model.time
         )
 
-        expr += sum(model.pi_u[i, 0] * gens_df.at[i, "g_0"] for i in model.gens)
+        expr -= sum(model.pi_u[i, 0] * gens_df.at[i, "g_0"] for i in model.gens)
 
-        expr -= sum(model.pi_d[i, 0] * gens_df.at[i, "g_0"] for i in model.gens)
+        expr += sum(model.pi_d[i, 0] * gens_df.at[i, "g_0"] for i in model.gens)
 
-        for t in model.time:
-            if t == 0:
-                continue
-            expr += sum(
-                model.sigma_u[i, t] * gens_df.at[i, "k_up"] * gens_df.at[i, "u_0"]
-                - model.sigma_d[i, t] * gens_df.at[i, "k_down"] * gens_df.at[i, "u_0"]
-                for i in model.gens
-            )
-
-        expr += pyo.quicksum(
-            model.psi_max[i, t] for i in model.gens for t in model.time
+        expr -= sum(
+            model.sigma_u[i, 0] * gens_df.at[i, "k_up"] * gens_df.at[i, "u_0"]
+            for i in model.gens
         )
 
-        return -expr
+        expr += sum(
+            model.sigma_d[i, 0] * gens_df.at[i, "k_down"] * gens_df.at[i, "u_0"]
+            for i in model.gens
+        )
+
+        expr -= sum(model.psi_max[i, t] for i in model.gens for t in model.time)
+
+        return expr
 
     def final_objective_rule(model):
         return primary_objective_rule(model) - big_w * (
@@ -212,7 +212,7 @@ def find_optimal_k_method_2(
                     model.k[t] * gens_df.at[i, "mc"]
                     - model.lambda_[t]
                     + model.mu_max[i, t]
-                    - model.zeta_min[i, t]
+                    - model.mu_min[i, t]
                     + model.pi_u[i, t]
                     - model.pi_u[i, t + 1]
                     - model.pi_d[i, t]
@@ -224,7 +224,7 @@ def find_optimal_k_method_2(
                     k_values_df.at[t, i] * gens_df.at[i, "mc"]
                     - model.lambda_[t]
                     + model.mu_max[i, t]
-                    - model.zeta_min[i, t]
+                    - model.mu_min[i, t]
                     + model.pi_u[i, t]
                     - model.pi_u[i, t + 1]
                     - model.pi_d[i, t]
@@ -237,7 +237,7 @@ def find_optimal_k_method_2(
                 model.k[t] * gens_df.at[i, "mc"]
                 - model.lambda_[t]
                 + model.mu_max[i, t]
-                - model.zeta_min[i, t]
+                - model.mu_min[i, t]
                 + model.pi_u[i, t]
                 - model.pi_d[i, t]
                 >= 0
@@ -247,7 +247,7 @@ def find_optimal_k_method_2(
                 k_values_df.at[t, i] * gens_df.at[i, "mc"]
                 - model.lambda_[t]
                 + model.mu_max[i, t]
-                - model.zeta_min[i, t]
+                - model.mu_min[i, t]
                 + model.pi_u[i, t]
                 - model.pi_d[i, t]
                 >= 0
@@ -258,95 +258,111 @@ def find_optimal_k_method_2(
     def status_dual_rule(model, i, t):
         if t != model.time.at(-1):
             return (
-                -model.mu_max[i, t] * gens_df.at[i, "g_max"]
-                + model.zeta_min[i, t] * gens_df.at[i, "g_min"]
+                gens_df.at[i, "f"]
+                - model.mu_max[i, t] * gens_df.at[i, "g_max"]
+                + model.mu_min[i, t] * gens_df.at[i, "g_min"]
                 + (model.sigma_u[i, t] - model.sigma_u[i, t + 1])
                 * gens_df.at[i, "k_up"]
                 - (model.sigma_d[i, t] - model.sigma_d[i, t + 1])
                 * gens_df.at[i, "k_down"]
                 + model.psi_max[i, t]
-                >= -gens_df.at[i, "f"]
+                >= 0
             )
         else:
             return (
-                -model.mu_max[i, t] * gens_df.at[i, "g_max"]
-                + model.zeta_min[i, t] * gens_df.at[i, "g_min"]
+                gens_df.at[i, "f"]
+                - model.mu_max[i, t] * gens_df.at[i, "g_max"]
+                + model.mu_min[i, t] * gens_df.at[i, "g_min"]
                 + model.sigma_u[i, t] * gens_df.at[i, "k_up"]
                 - model.sigma_d[i, t] * gens_df.at[i, "k_down"]
                 + model.psi_max[i, t]
-                >= -gens_df.at[i, "f"]
+                >= 0
             )
 
     model.status_dual = pyo.Constraint(model.gens, model.time, rule=status_dual_rule)
 
     def demand_dual_rule(model, t):
-        return model.lambda_[t] + model.nu_max[t] >= demand_df.at[t, "price"]
+        return -demand_df.at[t, "price"] + model.lambda_[t] + model.nu_max[t] >= 0
 
     model.demand_dual = pyo.Constraint(model.time, rule=demand_dual_rule)
 
-    # KKT condition from LP relaxation
-    def kkt_gen_dual_rule(model, i, t):
-        if t != model.time.at(-1):
+    # KKT conditions
+    # Stationarity conditions
+    def kkt_gen_rule(model, i, t):
+        if t != 0:
             return (
                 (
                     model.k[t] * gens_df.at[i, "mc"]
                     - model.lambda_hat[t]
+                    - model.mu_min_hat[i, t]
                     + model.mu_max_hat[i, t]
-                    - model.zeta_min_hat[i, t]
                     + model.pi_u_hat[i, t]
-                    - model.pi_u_hat[i, t + 1]
-                    - model.pi_d_hat[i, t]
-                    + model.pi_d_hat[i, t + 1]
+                    - model.pi_u_hat[i, t - 1]
+                    + model.pi_d_hat[i, t]
+                    - model.pi_d_hat[i, t - 1]
                     == 0
                 )
                 if i == opt_gen
                 else (
                     k_values_df.at[t, i] * gens_df.at[i, "mc"]
                     - model.lambda_hat[t]
+                    - model.mu_min_hat[i, t]
                     + model.mu_max_hat[i, t]
-                    - model.zeta_min_hat[i, t]
                     + model.pi_u_hat[i, t]
-                    - model.pi_u_hat[i, t + 1]
-                    - model.pi_d_hat[i, t]
-                    + model.pi_d_hat[i, t + 1]
+                    - model.pi_u_hat[i, t - 1]
+                    + model.pi_d_hat[i, t]
+                    - model.pi_d_hat[i, t - 1]
                     == 0
                 )
             )
-        if i == opt_gen:
-            return (
-                model.k[t] * gens_df.at[i, "mc"]
-                - model.lambda_hat[t]
-                + model.mu_max_hat[i, t]
-                - model.zeta_min_hat[i, t]
-                + model.pi_u_hat[i, t]
-                - model.pi_d_hat[i, t]
-                == 0
-            )
         else:
             return (
-                k_values_df.at[t, i] * gens_df.at[i, "mc"]
-                - model.lambda_hat[t]
-                + model.mu_max_hat[i, t]
-                - model.zeta_min_hat[i, t]
-                + model.pi_u_hat[i, t]
-                - model.pi_d_hat[i, t]
-                == 0
+                (
+                    model.k[t] * gens_df.at[i, "mc"]
+                    - model.lambda_hat[t]
+                    - model.mu_min_hat[i, t]
+                    + model.mu_max_hat[i, t]
+                    + model.pi_u_hat[i, t]
+                    + model.pi_d_hat[i, t]
+                    == 0
+                )
+                if i == opt_gen
+                else (
+                    k_values_df.at[t, i] * gens_df.at[i, "mc"]
+                    - model.lambda_hat[t]
+                    - model.mu_min_hat[i, t]
+                    + model.mu_max_hat[i, t]
+                    + model.pi_u_hat[i, t]
+                    + model.pi_d_hat[i, t]
+                    == 0
+                )
             )
 
-    model.gen_dual_kkt = pyo.Constraint(model.gens, model.time, rule=kkt_gen_dual_rule)
+    model.kkt_gen = pyo.Constraint(model.gens, model.time, rule=kkt_gen_rule)
 
     def kkt_demand_rule(model, t):
         return (
-            model.lambda_hat[t]
+            -demand_df.at[t, "price"]
+            + model.lambda_hat[t]
             + model.nu_max_hat[t]
             - model.nu_min_hat[t]
-            - demand_df.at[t, "price"]
             == 0
         )
 
-    model.demand_dual_kkt = pyo.Constraint(model.time, rule=kkt_demand_rule)
+    model.kkt_demand = pyo.Constraint(model.time, rule=kkt_demand_rule)
 
-    # complementary slackness
+    def kkt_start_up_rule(model, i, t):
+        return 1 - model.ro_u_hat[i, t] - model.sigma_u_hat[i, t] == 0
+
+    def kkt_shut_down_rule(model, i, t):
+        return 1 - model.ro_d_hat[i, t] - model.sigma_d_hat[i, t] == 0
+
+    model.kkt_start_up = pyo.Constraint(model.gens, model.time, rule=kkt_start_up_rule)
+    model.kkt_shut_down = pyo.Constraint(
+        model.gens, model.time, rule=kkt_shut_down_rule
+    )
+
+    # Complementary slackness conditions
     def g_max_cs_rule(model, i, t):
         return (
             model.mu_max_hat[i, t]
@@ -358,7 +374,7 @@ def find_optimal_k_method_2(
 
     def g_min_cs_rule(model, i, t):
         return (
-            model.zeta_min_hat[i, t]
+            model.mu_min_hat[i, t]
             * (gens_df.at[i, "g_min"] * model.u[i, t] - model.g[i, t])
             == 0
         )
@@ -374,50 +390,6 @@ def find_optimal_k_method_2(
         return model.nu_min_hat[t] * model.d[t] == 0
 
     model.d_min_cs = pyo.Constraint(model.time, rule=d_min_cs_rule)
-
-    def start_up_cs_rule(model, i, t):
-        if t == 0:
-            return (
-                model.sigma_u_hat[i, t]
-                * (
-                    model.c_up[i, t]
-                    - (model.u[i, t] - gens_df.at[i, "u_0"]) * gens_df.at[i, "k_up"]
-                )
-                == 0
-            )
-        else:
-            return (
-                model.sigma_u_hat[i, t]
-                * (
-                    model.c_up[i, t]
-                    - (model.u[i, t] - model.u[i, t - 1]) * gens_df.at[i, "k_up"]
-                )
-                == 0
-            )
-
-    model.start_up_cs = pyo.Constraint(model.gens, model.time, rule=start_up_cs_rule)
-
-    def shut_down_cs_rule(model, i, t):
-        if t == 0:
-            return (
-                model.sigma_d_hat[i, t]
-                * (
-                    model.c_down[i, t]
-                    - (gens_df.at[i, "u_0"] - model.u[i, t]) * gens_df.at[i, "k_down"]
-                )
-                == 0
-            )
-        else:
-            return (
-                model.sigma_d_hat[i, t]
-                * (
-                    model.c_down[i, t]
-                    - (model.u[i, t - 1] - model.u[i, t]) * gens_df.at[i, "k_down"]
-                )
-                == 0
-            )
-
-    model.shut_down_cs = pyo.Constraint(model.gens, model.time, rule=shut_down_cs_rule)
 
     def ru_max_cs_rule(model, i, t):
         if t == 0:
@@ -450,6 +422,64 @@ def find_optimal_k_method_2(
             )
 
     model.rd_max_cs = pyo.Constraint(model.gens, model.time, rule=rd_max_cs_rule)
+
+    def start_up_cs_rule_1(model, i, t):
+        if t == 0:
+            return (
+                model.sigma_u_hat[i, t]
+                * (
+                    model.c_up[i, t]
+                    - (model.u[i, t] - gens_df.at[i, "u_0"]) * gens_df.at[i, "k_up"]
+                )
+                == 0
+            )
+        else:
+            return (
+                model.sigma_u_hat[i, t]
+                * (
+                    model.c_up[i, t]
+                    - (model.u[i, t] - model.u[i, t - 1]) * gens_df.at[i, "k_up"]
+                )
+                == 0
+            )
+
+    def start_up_cs_rule_2(model, i, t):
+        return model.ro_u_hat[i, t] * model.c_up[i, t] == 0
+
+    model.start_up_cs = pyo.Constraint(model.gens, model.time, rule=start_up_cs_rule_1)
+    model.start_up_cs_2 = pyo.Constraint(
+        model.gens, model.time, rule=start_up_cs_rule_2
+    )
+
+    def shut_down_cs_rule_1(model, i, t):
+        if t == 0:
+            return (
+                model.sigma_d_hat[i, t]
+                * (
+                    model.c_down[i, t]
+                    - (gens_df.at[i, "u_0"] - model.u[i, t]) * gens_df.at[i, "k_down"]
+                )
+                == 0
+            )
+        else:
+            return (
+                model.sigma_d_hat[i, t]
+                * (
+                    model.c_down[i, t]
+                    - (model.u[i, t - 1] - model.u[i, t]) * gens_df.at[i, "k_down"]
+                )
+                == 0
+            )
+
+    def shut_down_cs_rule_2(model, i, t):
+        return model.ro_d_hat[i, t] * model.c_down[i, t] == 0
+
+    model.shut_down_cs = pyo.Constraint(
+        model.gens, model.time, rule=shut_down_cs_rule_1
+    )
+    model.shut_down_cs_2 = pyo.Constraint(
+        model.gens, model.time, rule=shut_down_cs_rule_2
+    )
 
     # solve
     instance = model.create_instance()
@@ -528,7 +558,7 @@ if __name__ == "__main__":
     demand_df = demand_df.reset_index(drop=True)
 
     k_values_df = pd.DataFrame(columns=gens_df.index, index=demand_df.index, data=1.0)
-    opt_gen = 1  # generator that is allowed to bid strategically
+    opt_gen = 2  # generator that is allowed to bid strategically
 
     main_df, supp_df, k_values = find_optimal_k_method_2(
         gens_df=gens_df,
@@ -537,8 +567,11 @@ if __name__ == "__main__":
         k_max=k_max,
         opt_gen=opt_gen,
         big_w=big_w,
+        time_limit=60,
         print_results=True,
     )
 
     print(main_df)
-# %%
+    print()
+    print(k_values)
+    # %%
