@@ -6,7 +6,7 @@ import plotly.express as px
 
 # from model_1 import find_optimal_k_method_1 as method_1
 # from model_2 import find_optimal_k_method_2 as method_2
-from model_1_discrete import find_optimal_k_method_1 as method_1
+from model_1 import find_optimal_k_method_1 as method_1
 from model_2_discrete import find_optimal_k_method_2 as method_2
 from uc_problem import solve_uc_problem
 from utils import calculate_profits, calculate_uplift

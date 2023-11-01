@@ -13,7 +13,6 @@ def find_optimal_k_method_1(
     big_w=10000,
     time_limit=60,
     print_results=False,
-    K=5,
 ):
     model = pyo.ConcreteModel()
 
@@ -43,78 +42,10 @@ def find_optimal_k_method_1(
 
     model.psi_max = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
 
-    # binary expansion variables
-    model.g_binary = pyo.Var(model.time, range(K), within=pyo.Binary)
-    model.z_lambda = pyo.Var(model.time, range(K), within=pyo.NonNegativeReals)
-    model.z_k = pyo.Var(model.time, range(K), within=pyo.NonNegativeReals)
-
-    model.M = pyo.Param(initialize=max(gens_df["mc"]) * k_max)
-    delta = [gens_df.at[gen, "g_max"] / (pow(2, K) - 1) for gen in gens_df.index]
-
-    # binary expansion constraints
-    def g_binary_rule(model, t):
-        return model.g[opt_gen, t] == delta[opt_gen] * sum(
-            pow(2, k) * model.g_binary[t, k] for k in range(K)
-        )
-
-    model.g_binary_constr = pyo.Constraint(model.time, rule=g_binary_rule)
-
-    def binary_expansion_1_rule(model, t, n):
-        return model.z_lambda[t, n] == model.lambda_[t] * model.g_binary[t, n]
-
-    def binary_expansion_1_constr_1_max_rule(model, t, n):
-        return model.lambda_[t] - model.z_lambda[t, n] <= model.M * (
-            1 - model.g_binary[t, n]
-        )
-
-    def binary_expansion_1_constr_1_min_rule(model, t, n):
-        return model.lambda_[t] - model.z_lambda[t, n] >= 0
-
-    def binary_expansion_1_constr_2_rule(model, t, n):
-        return model.z_lambda[t, n] <= model.M * model.g_binary[t, n]
-
-    model.binary_expansion_1_constr = pyo.Constraint(
-        model.time, range(K), rule=binary_expansion_1_rule
-    )
-    model.binary_expansion_1_constr_1_max = pyo.Constraint(
-        model.time, range(K), rule=binary_expansion_1_constr_1_max_rule
-    )
-    model.binary_expansion_1_constr_1_min = pyo.Constraint(
-        model.time, range(K), rule=binary_expansion_1_constr_1_min_rule
-    )
-    model.binary_expansion_1_constr_2 = pyo.Constraint(
-        model.time, range(K), rule=binary_expansion_1_constr_2_rule
-    )
-
-    def binary_expansion_2_rule(model, t, n):
-        return model.z_k[t, n] == model.k[t] * model.g_binary[t, n]
-
-    def binary_expansion_2_constr_1_max_rule(model, t, n):
-        return model.k[t] - model.z_k[t, n] <= model.M * (1 - model.g_binary[t, n])
-
-    def binary_expansion_2_constr_1_min_rule(model, t, n):
-        return model.k[t] - model.z_k[t, n] >= 0
-
-    def binary_expansion_2_constr_2_rule(model, t, n):
-        return model.z_k[t, n] <= model.M * model.g_binary[t, n]
-
-    model.binary_expansion_2_constr = pyo.Constraint(
-        model.time, range(K), rule=binary_expansion_2_rule
-    )
-    model.binary_expansion_2_constr_1_max = pyo.Constraint(
-        model.time, range(K), rule=binary_expansion_2_constr_1_max_rule
-    )
-    model.binary_expansion_2_constr_1_min = pyo.Constraint(
-        model.time, range(K), rule=binary_expansion_2_constr_1_min_rule
-    )
-    model.binary_expansion_2_constr_2 = pyo.Constraint(
-        model.time, range(K), rule=binary_expansion_2_constr_2_rule
-    )
-
     # objective rules
     def primary_objective_rule(model):
         return sum(
-            delta[opt_gen] * sum(pow(2, n) * model.z_lambda[t, n] for n in range(K))
+            model.lambda_[t] * model.g[opt_gen, t]
             - gens_df.at[opt_gen, "mc"] * model.g[opt_gen, t]
             - gens_df.at[opt_gen, "f"] * model.u[opt_gen, t]
             - model.c_up[opt_gen, t]
@@ -125,9 +56,7 @@ def find_optimal_k_method_1(
     def duality_gap_part_1_rule(model):
         expr = sum(
             (
-                gens_df.at[gen, "mc"]
-                * delta[gen]
-                * sum(pow(2, n) * model.z_k[t, n] for n in range(K))
+                model.k[t] * gens_df.at[gen, "mc"] * model.g[gen, t]
                 + gens_df.at[gen, "f"] * model.u[gen, t]
                 + model.c_up[gen, t]
                 + model.c_down[gen, t]
@@ -348,7 +277,7 @@ def find_optimal_k_method_1(
     instance = model.create_instance()
 
     solver = SolverFactory("gurobi")
-    options = {"LogToConsole": print_results, "TimeLimit": time_limit}
+    options = {"NonConvex": 2, "LogToConsole": print_results, "TimeLimit": time_limit}
 
     results = solver.solve(instance, options=options, tee=print_results)
 
@@ -428,7 +357,6 @@ if __name__ == "__main__":
         big_w=big_w,
         time_limit=10,
         print_results=True,
-        K=10,
     )
 
     print(main_df)

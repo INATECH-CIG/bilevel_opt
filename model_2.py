@@ -712,7 +712,8 @@ if __name__ == "__main__":
 
     big_w = 1000  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
-
+    opt_gen = 0  # generator that is allowed to bid strategically
+    
     start = pd.to_datetime("2019-03-02 00:00")
     end = pd.to_datetime("2019-03-03 00:00")
 
@@ -727,7 +728,6 @@ if __name__ == "__main__":
     demand_df = demand_df.reset_index(drop=True)
 
     k_values_df = pd.DataFrame(columns=gens_df.index, index=demand_df.index, data=1.0)
-    opt_gen = 2  # generator that is allowed to bid strategically
 
     main_df, supp_df, k_values = find_optimal_k_method_2(
         gens_df=gens_df,
@@ -738,7 +738,7 @@ if __name__ == "__main__":
         big_w=big_w,
         time_limit=180,
         print_results=True,
-        K=5,
+        K=10,
     )
 
     print(main_df)
