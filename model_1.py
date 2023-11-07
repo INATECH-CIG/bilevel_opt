@@ -48,7 +48,6 @@ def find_optimal_k_method_1(
     model.z_lambda = pyo.Var(model.time, range(K), within=pyo.NonNegativeReals)
     model.z_k = pyo.Var(model.time, range(K), within=pyo.NonNegativeReals)
 
-    model.M = pyo.Param(initialize=max(gens_df["mc"]) * k_max)
     delta = [gens_df.at[gen, "g_max"] / (pow(2, K) - 1) for gen in gens_df.index]
 
     # binary expansion constraints
@@ -59,23 +58,19 @@ def find_optimal_k_method_1(
 
     model.g_binary_constr = pyo.Constraint(model.time, rule=g_binary_rule)
 
-    def binary_expansion_1_rule(model, t, n):
-        return model.z_lambda[t, n] == model.lambda_[t] * model.g_binary[t, n]
-
     def binary_expansion_1_constr_1_max_rule(model, t, n):
-        return model.lambda_[t] - model.z_lambda[t, n] <= model.M * (
-            1 - model.g_binary[t, n]
-        )
+        return model.lambda_[t] - model.z_lambda[t, n] <= (
+            max(gens_df["mc"]) * k_max
+        ) * (1 - model.g_binary[t, n])
 
     def binary_expansion_1_constr_1_min_rule(model, t, n):
         return model.lambda_[t] - model.z_lambda[t, n] >= 0
 
     def binary_expansion_1_constr_2_rule(model, t, n):
-        return model.z_lambda[t, n] <= model.M * model.g_binary[t, n]
+        return (
+            model.z_lambda[t, n] <= (max(gens_df["mc"]) * k_max) * model.g_binary[t, n]
+        )
 
-    model.binary_expansion_1_constr = pyo.Constraint(
-        model.time, range(K), rule=binary_expansion_1_rule
-    )
     model.binary_expansion_1_constr_1_max = pyo.Constraint(
         model.time, range(K), rule=binary_expansion_1_constr_1_max_rule
     )
@@ -86,21 +81,15 @@ def find_optimal_k_method_1(
         model.time, range(K), rule=binary_expansion_1_constr_2_rule
     )
 
-    def binary_expansion_2_rule(model, t, n):
-        return model.z_k[t, n] == model.k[t] * model.g_binary[t, n]
-
     def binary_expansion_2_constr_1_max_rule(model, t, n):
-        return model.k[t] - model.z_k[t, n] <= model.M * (1 - model.g_binary[t, n])
+        return model.k[t] - model.z_k[t, n] <= 2 * (1 - model.g_binary[t, n])
 
     def binary_expansion_2_constr_1_min_rule(model, t, n):
         return model.k[t] - model.z_k[t, n] >= 0
 
     def binary_expansion_2_constr_2_rule(model, t, n):
-        return model.z_k[t, n] <= model.M * model.g_binary[t, n]
+        return model.z_k[t, n] <= 2 * model.g_binary[t, n]
 
-    model.binary_expansion_2_constr = pyo.Constraint(
-        model.time, range(K), rule=binary_expansion_2_rule
-    )
     model.binary_expansion_2_constr_1_max = pyo.Constraint(
         model.time, range(K), rule=binary_expansion_2_constr_1_max_rule
     )
@@ -275,7 +264,7 @@ def find_optimal_k_method_1(
                     - model.pi_u[i, t + 1]
                     - model.pi_d[i, t]
                     + model.pi_d[i, t + 1]
-                    >= 0
+                    == 0
                 )
                 if i == opt_gen
                 else (
@@ -287,7 +276,7 @@ def find_optimal_k_method_1(
                     - model.pi_u[i, t + 1]
                     - model.pi_d[i, t]
                     + model.pi_d[i, t + 1]
-                    >= 0
+                    == 0
                 )
             )
         if i == opt_gen:
@@ -298,7 +287,7 @@ def find_optimal_k_method_1(
                 - model.mu_min[i, t]
                 + model.pi_u[i, t]
                 - model.pi_d[i, t]
-                >= 0
+                == 0
             )
         else:
             return (
@@ -308,7 +297,7 @@ def find_optimal_k_method_1(
                 - model.mu_min[i, t]
                 + model.pi_u[i, t]
                 - model.pi_d[i, t]
-                >= 0
+                == 0
             )
 
     model.gen_dual = pyo.Constraint(model.gens, model.time, rule=gen_dual_rule)
@@ -400,12 +389,12 @@ def find_optimal_k_method_1(
 if __name__ == "__main__":
     case = "Case_1"
 
-    big_w = 1000  # weight for duality gap objective
+    big_w = 10  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
-    opt_gen = 2  # generator that is allowed to bid strategically
-    
+    opt_gen = 0  # generator that is allowed to bid strategically
+
     start = pd.to_datetime("2019-03-02 00:00")
-    end = pd.to_datetime("2019-03-03 00:00")
+    end = pd.to_datetime("2019-03-02 12:00")
 
     # gens
     gens_df = pd.read_csv(f"inputs/{case}/gens.csv", index_col=0)
@@ -426,9 +415,9 @@ if __name__ == "__main__":
         k_max=k_max,
         opt_gen=opt_gen,
         big_w=big_w,
-        time_limit=10,
+        time_limit=60,
         print_results=True,
-        K=10,
+        K=5,
     )
 
     print(main_df)
