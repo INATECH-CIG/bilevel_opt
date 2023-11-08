@@ -82,13 +82,13 @@ def find_optimal_k_method_1(
     )
 
     def binary_expansion_2_constr_1_max_rule(model, t, n):
-        return model.k[t] - model.z_k[t, n] <= 2 * (1 - model.g_binary[t, n])
+        return model.k[t] - model.z_k[t, n] <= (max(gens_df["mc"]) * k_max) * (1 - model.g_binary[t, n])
 
     def binary_expansion_2_constr_1_min_rule(model, t, n):
         return model.k[t] - model.z_k[t, n] >= 0
 
     def binary_expansion_2_constr_2_rule(model, t, n):
-        return model.z_k[t, n] <= 2 * model.g_binary[t, n]
+        return model.z_k[t, n] <= (max(gens_df["mc"]) * k_max) * model.g_binary[t, n]
 
     model.binary_expansion_2_constr_1_max = pyo.Constraint(
         model.time, range(K), rule=binary_expansion_2_constr_1_max_rule
@@ -357,7 +357,7 @@ if __name__ == "__main__":
 
     big_w = 10  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
-    opt_gen = 0  # generator that is allowed to bid strategically
+    opt_gen = 1  # generator that is allowed to bid strategically
 
     start = pd.to_datetime("2019-03-02 00:00")
     end = pd.to_datetime("2019-03-03 00:00")
@@ -381,7 +381,7 @@ if __name__ == "__main__":
         k_max=k_max,
         opt_gen=opt_gen,
         big_w=big_w,
-        time_limit=60,
+        time_limit=180,
         print_results=True,
         K=10,
     )

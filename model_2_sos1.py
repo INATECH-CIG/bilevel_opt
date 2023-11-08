@@ -504,7 +504,7 @@ def find_optimal_k_method_2(
     options = {
         "LogToConsole": print_results,
         "TimeLimit": time_limit,
-        "PreSOS1BigM": -1,
+        "PreSOS1BigM": 0,
     }
 
     results = solver.solve(instance, options=options, tee=print_results)
@@ -571,10 +571,10 @@ if __name__ == "__main__":
 
     big_w = 10  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
-    opt_gen = 0  # generator that is allowed to bid strategically
+    opt_gen = 1  # generator that is allowed to bid strategically
 
     start = pd.to_datetime("2019-03-02 00:00")
-    end = pd.to_datetime("2019-03-03 00:00")
+    end = pd.to_datetime("2019-03-02 12:00")
 
     # gens
     gens_df = pd.read_csv(f"inputs/{case}/gens.csv", index_col=0)
@@ -597,7 +597,7 @@ if __name__ == "__main__":
         big_w=big_w,
         time_limit=180,
         print_results=True,
-        K=5,
+        K=10,
     )
 
     print(main_df)

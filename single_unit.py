@@ -14,11 +14,12 @@ from utils import calculate_profits, calculate_uplift
 # %%
 if __name__ == "__main__":
     case = "Case_1"
-    opt_gen = 0  # generator that is allowed to bid strategically
+    opt_gen = 1  # generator that is allowed to bid strategically
 
-    big_w = 10  # weight for duality gap objective
+    big_w = 100  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
-    time_limit = 180  # time limit in seconds for each optimization
+    time_limit = 200  # time limit in seconds for each optimization
+    K=5
 
     start = pd.to_datetime("2019-03-02 00:00")
     end = pd.to_datetime("2019-03-03 00:00")
@@ -36,7 +37,7 @@ if __name__ == "__main__":
     k_values_df = pd.DataFrame(columns=gens_df.index, index=demand_df.index, data=1.0)
 
     print_results = False
-    optimize = True
+    optimize = False
 
     # %%
     if optimize:
@@ -50,7 +51,7 @@ if __name__ == "__main__":
             big_w=big_w,
             time_limit=time_limit,
             print_results=print_results,
-            K=10,
+            K=K,
         )
 
         k_values_df_1 = k_values_df.copy()
@@ -75,7 +76,7 @@ if __name__ == "__main__":
             big_w=big_w,
             time_limit=time_limit,
             print_results=print_results,
-            K=10,
+            K=K,
         )
 
         # %%
@@ -221,18 +222,14 @@ if __name__ == "__main__":
     # plot sum of both profits as bar chart
     profits = pd.concat(
         [
-            profits_method_1[opt_gen],
             updated_profits_method_1[opt_gen],
-            profits_method_2[opt_gen],
             updated_profits_method_2[opt_gen],
             rl_unit_profits,
         ],
         axis=1,
     )
     profits.columns = [
-        "Method 1",
         "Method 1 (after UC)",
-        "Method 2",
         "Method 2 (after UC)",
         "Method 3 (RL)",
     ]
@@ -243,32 +240,18 @@ if __name__ == "__main__":
         labels={"index": "Method", "Profit": "Profit [€]"},
     )
 
-    # add Method 1 bar
-    fig.add_bar(
-        x=["Method 1"],
-        y=[profits["Method 1"].sum()],
-        name="Method 1",
-    )
-
     # add Method 1 (after UC) bar
     fig.add_bar(
         x=["Method 1 (after UC)"],
         y=[profits["Method 1 (after UC)"].sum()],
-        name="Method 1 (after UC)",
-    )
-
-    # add Method 2 bar
-    fig.add_bar(
-        x=["Method 2"],
-        y=[profits["Method 2"].sum()],
-        name="Method 2",
+        name="Method 1",
     )
 
     # add Method 2 (after UC) bar
     fig.add_bar(
         x=["Method 2 (after UC)"],
         y=[profits["Method 2 (after UC)"].sum()],
-        name="Method 2 (after UC)",
+        name="Method 2",
     )
 
     # add an extra bar of the total profit with uplift
@@ -276,7 +259,7 @@ if __name__ == "__main__":
     fig.add_bar(
         x=["Method 2 (with uplift)"],
         y=[total_profit_with_uplift_method_2],
-        name="Method 2 (after UC) with uplift",
+        name="Method 2 with uplift",
     )
 
     # add Method 3 (RL) bar

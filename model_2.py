@@ -50,7 +50,7 @@ def find_optimal_k_method_2(
     model.mu_max_hat = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
     model.mu_min_hat = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
     model.nu_max_hat = pyo.Var(model.time, within=pyo.NonNegativeReals)
-    model.nu_min_hat = pyo.Var(model.time, within=pyo.NonNegativeReals)
+    # model.nu_min_hat = pyo.Var(model.time, within=pyo.NonNegativeReals)
     model.pi_u_hat = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
     model.pi_d_hat = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
 
@@ -337,8 +337,8 @@ def find_optimal_k_method_2(
             -demand_df.at[t, "price"]
             + model.lambda_hat[t]
             + model.nu_max_hat[t]
-            - model.nu_min_hat[t]
-            == 0
+            # - model.nu_min_hat[t]
+            >= 0
         )
 
     model.kkt_demand = pyo.Constraint(model.time, rule=kkt_demand_rule)
@@ -419,28 +419,28 @@ def find_optimal_k_method_2(
         model.time, rule=nu_max_hat_binary_rule_3
     )
 
-    model.nu_min_hat_binary = pyo.Var(model.time, within=pyo.Binary)
+    # model.nu_min_hat_binary = pyo.Var(model.time, within=pyo.Binary)
 
-    def nu_min_hat_binary_rule_1(model, t):
-        return model.d[t] <= max(demand_df["volume"]) * (1 - model.nu_min_hat_binary[t])
+    # def nu_min_hat_binary_rule_1(model, t):
+    #     return model.d[t] <= max(demand_df["volume"]) * (1 - model.nu_min_hat_binary[t])
 
-    def nu_min_hat_binary_rule_2(model, t):
-        return model.d[t] >= -max(demand_df["volume"]) * (
-            1 - model.nu_min_hat_binary[t]
-        )
+    # def nu_min_hat_binary_rule_2(model, t):
+    #     return model.d[t] >= -max(demand_df["volume"]) * (
+    #         1 - model.nu_min_hat_binary[t]
+    #     )
 
-    def nu_min_hat_binary_rule_3(model, t):
-        return model.nu_min_hat[t] <= big_M * model.nu_min_hat_binary[t]
+    # def nu_min_hat_binary_rule_3(model, t):
+    #     return model.nu_min_hat[t] <= big_M * model.nu_min_hat_binary[t]
 
-    model.nu_min_hat_binary_constr_1 = pyo.Constraint(
-        model.time, rule=nu_min_hat_binary_rule_1
-    )
-    model.nu_min_hat_binary_constr_2 = pyo.Constraint(
-        model.time, rule=nu_min_hat_binary_rule_2
-    )
-    model.nu_min_hat_binary_constr_3 = pyo.Constraint(
-        model.time, rule=nu_min_hat_binary_rule_3
-    )
+    # model.nu_min_hat_binary_constr_1 = pyo.Constraint(
+    #     model.time, rule=nu_min_hat_binary_rule_1
+    # )
+    # model.nu_min_hat_binary_constr_2 = pyo.Constraint(
+    #     model.time, rule=nu_min_hat_binary_rule_2
+    # )
+    # model.nu_min_hat_binary_constr_3 = pyo.Constraint(
+    #     model.time, rule=nu_min_hat_binary_rule_3
+    # )
 
     model.pi_u_hat_binary = pyo.Var(model.gens, model.time, within=pyo.Binary)
 
@@ -582,10 +582,10 @@ if __name__ == "__main__":
 
     big_w = 1000  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
-    opt_gen = 0  # generator that is allowed to bid strategically
+    opt_gen = 1  # generator that is allowed to bid strategically
 
     start = pd.to_datetime("2019-03-02 00:00")
-    end = pd.to_datetime("2019-03-03 00:00")
+    end = pd.to_datetime("2019-03-02 12:00")
 
     # gens
     gens_df = pd.read_csv(f"inputs/{case}/gens.csv", index_col=0)
@@ -606,7 +606,7 @@ if __name__ == "__main__":
         k_max=k_max,
         opt_gen=opt_gen,
         big_w=big_w,
-        time_limit=180,
+        time_limit=500,
         print_results=True,
         K=10,
         big_M=10e6,
