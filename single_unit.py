@@ -50,6 +50,7 @@ if __name__ == "__main__":
             big_w=big_w,
             time_limit=time_limit,
             print_results=print_results,
+            K=10,
         )
 
         k_values_df_1 = k_values_df.copy()
@@ -74,6 +75,7 @@ if __name__ == "__main__":
             big_w=big_w,
             time_limit=time_limit,
             print_results=print_results,
+            K=10,
         )
 
         # %%
