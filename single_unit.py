@@ -16,13 +16,13 @@ if __name__ == "__main__":
     case = "Case_1"
     opt_gen = 1  # generator that is allowed to bid strategically
 
-    big_w = 100  # weight for duality gap objective
+    big_w = 10  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
-    time_limit = 200  # time limit in seconds for each optimization
-    K=5
+    time_limit = 300  # time limit in seconds for each optimization
+    K = 10
 
-    start = pd.to_datetime("2019-03-02 00:00")
-    end = pd.to_datetime("2019-03-03 00:00")
+    start = pd.to_datetime("2019-03-02 06:00")
+    end = pd.to_datetime("2019-03-02 14:00")
 
     # gens
     gens_df = pd.read_csv(f"inputs/{case}/gens.csv", index_col=0)
@@ -37,7 +37,12 @@ if __name__ == "__main__":
     k_values_df = pd.DataFrame(columns=gens_df.index, index=demand_df.index, data=1.0)
 
     print_results = False
-    optimize = False
+    optimize = True
+
+    save_path = f"outputs/{case}/gen_{opt_gen}"
+    # check if path exists
+    if not os.path.exists(save_path):
+        os.makedirs(save_path)
 
     # %%
     if optimize:
@@ -79,8 +84,6 @@ if __name__ == "__main__":
             K=K,
         )
 
-        # %%
-
         k_values_df_2 = k_values_df.copy()
         k_values_df_2[opt_gen] = k_values_2
 
@@ -103,22 +106,11 @@ if __name__ == "__main__":
         )
 
         # save all results to csv
-        save_path = f"outputs/{case}/gen_{opt_gen}"
-        # check if path exists
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
-
         k_values_1.to_csv(f"{save_path}/k_values_1.csv")
         k_values_2.to_csv(f"{save_path}/k_values_2.csv")
 
-        main_df_1.to_csv(f"{save_path}/main_df_1.csv")
-        supp_df_1.to_csv(f"{save_path}/supp_df_1.csv")
-
         updated_main_df_1.to_csv(f"{save_path}/updated_main_df_1.csv")
         updated_supp_df_1.to_csv(f"{save_path}/updated_supp_df_1.csv")
-
-        main_df_2.to_csv(f"{save_path}/main_df_2.csv")
-        supp_df_2.to_csv(f"{save_path}/supp_df_2.csv")
 
         updated_main_df_2.to_csv(f"{save_path}/updated_main_df_2.csv")
         updated_supp_df_2.to_csv(f"{save_path}/updated_supp_df_2.csv")
@@ -132,14 +124,8 @@ if __name__ == "__main__":
     k_values_1 = pd.read_csv(f"{path}/k_values_1.csv", index_col=0)
     k_values_2 = pd.read_csv(f"{path}/k_values_2.csv", index_col=0)
 
-    main_df_1 = pd.read_csv(f"{path}/main_df_1.csv", index_col=0)
-    supp_df_1 = pd.read_csv(f"{path}/supp_df_1.csv", index_col=0)
-
     updated_main_df_1 = pd.read_csv(f"{path}/updated_main_df_1.csv", index_col=0)
     updated_supp_df_1 = pd.read_csv(f"{path}/updated_supp_df_1.csv", index_col=0)
-
-    main_df_2 = pd.read_csv(f"{path}/main_df_2.csv", index_col=0)
-    supp_df_2 = pd.read_csv(f"{path}/supp_df_2.csv", index_col=0)
 
     updated_main_df_2 = pd.read_csv(f"{path}/updated_main_df_2.csv", index_col=0)
     updated_supp_df_2 = pd.read_csv(f"{path}/updated_supp_df_2.csv", index_col=0)
@@ -147,9 +133,6 @@ if __name__ == "__main__":
     profits_method_1 = calculate_profits(main_df_1, supp_df_1, gens_df)
     updated_profits_method_1 = calculate_profits(
         updated_main_df_1, updated_supp_df_1, gens_df, price_column="mcp"
-    )
-    profits_method_2 = calculate_profits(
-        main_df_2, supp_df_2, gens_df, price_column="mcp_hat"
     )
     updated_profits_method_2 = calculate_profits(
         updated_main_df_2, updated_supp_df_2, gens_df, price_column="mcp"
@@ -178,45 +161,27 @@ if __name__ == "__main__":
     rl_unit_orders = rl_unit_orders.loc[start:end]
     rl_unit_orders = rl_unit_orders.reset_index(drop=False)
 
-    marginal_cost = gens_df.at[opt_gen, "mc"]
-    rl_unit_profits = pd.Series(index=rl_unit_orders.index)
-    rl_unit_profits = rl_unit_orders["accepted_volume"] * (
-        rl_unit_orders["accepted_price"] - marginal_cost
-    )
+    k_values_df_3 = k_values_df.copy()
+    k_values_df_3[opt_gen] = rl_unit_orders["price"] / gens_df.at[opt_gen, "mc"]
 
-    # iterate over all rows and subtract start up and shut down costs if the unit turned on or off
-    for t in range(1, len(rl_unit_orders)):
-        if t == 1:
-            if (
-                rl_unit_orders.at[t, "accepted_volume"] > 0
-                and gens_df.at[opt_gen, "u_0"] == 0
-            ):
-                rl_unit_profits[t] -= gens_df.at[opt_gen, "k_up"]
-            elif (
-                rl_unit_orders.at[t, "accepted_volume"] == 0
-                and gens_df.at[opt_gen, "u_0"] > 0
-            ):
-                rl_unit_profits[t] -= gens_df.at[opt_gen, "k_down"]
-        elif (
-            rl_unit_orders.at[t, "accepted_volume"] == 0
-            and rl_unit_orders.at[t - 1, "accepted_volume"] > 0
-        ):
-            rl_unit_profits[t] -= gens_df.at[opt_gen, "k_down"]
-        elif (
-            rl_unit_orders.at[t, "accepted_volume"] > 0
-            and rl_unit_orders.at[t - 1, "accepted_volume"] == 0
-        ):
-            rl_unit_profits[t] -= gens_df.at[opt_gen, "k_up"]
+    main_df_3, supp_df_3 = solve_uc_problem(gens_df, demand_df, k_values_df_3)
 
-    uplift_method_rl, uplift_df_method_rl = calculate_uplift(
-        main_df=rl_unit_orders,
+    profits_method_3 = calculate_profits(main_df_3, supp_df_3, gens_df)
+
+    main_df_3.to_csv(f"{save_path}/updated_main_df_3.csv")
+    supp_df_3.to_csv(f"{save_path}/updated_supp_df_3.csv")
+
+    # calculate uplifts
+    uplift_method_3, uplift_df_method_3 = calculate_uplift(
+        main_df=main_df_3,
         gens_df=gens_df,
         gen_unit=opt_gen,
-        price_column="accepted_price",
-        profits=rl_unit_profits.sum(),
+        profits=profits_method_3[opt_gen].sum(),
     )
 
-    total_profit_with_uplift_method_rl = rl_unit_profits.sum() + uplift_method_rl
+    total_profit_with_uplift_method_3 = (
+        profits_method_3[opt_gen].sum() + uplift_method_3
+    )
 
     # %%
     # plot sum of both profits as bar chart
@@ -224,7 +189,7 @@ if __name__ == "__main__":
         [
             updated_profits_method_1[opt_gen],
             updated_profits_method_2[opt_gen],
-            rl_unit_profits,
+            profits_method_3[opt_gen],
         ],
         axis=1,
     )
@@ -272,7 +237,7 @@ if __name__ == "__main__":
     # add rl with uplift
     fig.add_bar(
         x=["Method 3 (RL with uplift)"],
-        y=[total_profit_with_uplift_method_rl],
+        y=[total_profit_with_uplift_method_3],
         name="Method 3 (RL) with uplift",
     )
 

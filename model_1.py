@@ -359,8 +359,8 @@ if __name__ == "__main__":
     k_max = 2  # maximum multiplier for strategic bidding
     opt_gen = 1  # generator that is allowed to bid strategically
 
-    start = pd.to_datetime("2019-03-02 00:00")
-    end = pd.to_datetime("2019-03-03 00:00")
+    start = pd.to_datetime("2019-03-02 06:00")
+    end = pd.to_datetime("2019-03-02 14:00")
 
     # gens
     gens_df = pd.read_csv(f"inputs/{case}/gens.csv", index_col=0)
@@ -381,7 +381,7 @@ if __name__ == "__main__":
         k_max=k_max,
         opt_gen=opt_gen,
         big_w=big_w,
-        time_limit=180,
+        time_limit=300,
         print_results=True,
         K=10,
     )
