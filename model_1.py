@@ -357,7 +357,7 @@ if __name__ == "__main__":
 
     big_w = 10  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
-    opt_gen = 1  # generator that is allowed to bid strategically
+    opt_gen = 2  # generator that is allowed to bid strategically
 
     start = pd.to_datetime("2019-03-02 06:00")
     end = pd.to_datetime("2019-03-02 14:00")

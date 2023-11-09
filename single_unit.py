@@ -130,7 +130,6 @@ if __name__ == "__main__":
     updated_main_df_2 = pd.read_csv(f"{path}/updated_main_df_2.csv", index_col=0)
     updated_supp_df_2 = pd.read_csv(f"{path}/updated_supp_df_2.csv", index_col=0)
 
-    profits_method_1 = calculate_profits(main_df_1, supp_df_1, gens_df)
     updated_profits_method_1 = calculate_profits(
         updated_main_df_1, updated_supp_df_1, gens_df, price_column="mcp"
     )
@@ -207,14 +206,14 @@ if __name__ == "__main__":
 
     # add Method 1 (after UC) bar
     fig.add_bar(
-        x=["Method 1 (after UC)"],
+        x=["Method 1"],
         y=[profits["Method 1 (after UC)"].sum()],
         name="Method 1",
     )
 
     # add Method 2 (after UC) bar
     fig.add_bar(
-        x=["Method 2 (after UC)"],
+        x=["Method 2 (with KKTs)"],
         y=[profits["Method 2 (after UC)"].sum()],
         name="Method 2",
     )
@@ -275,7 +274,7 @@ if __name__ == "__main__":
     # %% Bids of the unit
     bids_method_1 = k_values_1 * gens_df.at[opt_gen, "mc"]
     bids_method_2 = k_values_2 * gens_df.at[opt_gen, "mc"]
-    bids_method_3 = rl_unit_orders["price"]
+    bids_method_3 = k_values_df_3[opt_gen] * gens_df.at[opt_gen, "mc"]
 
     bids = pd.concat([bids_method_1, bids_method_2, bids_method_3], axis=1)
     bids.columns = ["Method 1", "Method 2", "Method 3 (RL)"]
@@ -298,13 +297,13 @@ if __name__ == "__main__":
     # save plot as html
     # fig.write_html(f"outputs/{case}/bids_{opt_gen}.html")
     # save plot as pdf
-    # fig.write_image(f"outputs/{case}/bids_{opt_gen}.pdf")
+    fig.write_image(f"outputs/{case}/bids_{opt_gen}.pdf")
     fig.show()
 
     # %% Dispatch of the unit
     dispatch_method_1 = updated_main_df_1[f"gen_{opt_gen}"]
     dispatch_method_2 = updated_main_df_2[f"gen_{opt_gen}"]
-    dispatch_method_3 = rl_unit_orders["accepted_volume"]
+    dispatch_method_3 = main_df_3[f"gen_{opt_gen}"]
 
     dispatch = pd.concat(
         [dispatch_method_1, dispatch_method_2, dispatch_method_3], axis=1
@@ -334,13 +333,9 @@ if __name__ == "__main__":
     fig.show()
 
     # %% Market clearing price
-    mcp_method_1 = main_df_1["mcp"]
-    mcp_method_2 = main_df_2["mcp_hat"]
-    mcp_method_3 = market_orders[market_orders["unit_id"] == "demand_EOM"][
-        "accepted_price"
-    ]
-    mcp_method_3 = mcp_method_3.loc[start:end]
-    mcp_method_3 = mcp_method_3.reset_index(drop=True)
+    mcp_method_1 = updated_main_df_1["mcp"]
+    mcp_method_2 = updated_main_df_2["mcp"]
+    mcp_method_3 = main_df_3["mcp"]
 
     mcp = pd.concat([mcp_method_1, mcp_method_2, mcp_method_3], axis=1)
     mcp.columns = ["Method 1", "Method 2", "Method 3 (RL)"]
@@ -405,7 +400,7 @@ if __name__ == "__main__":
         {
             "Unit": gens_df.index,
             "Marginal cost": gens_df["mc"],
-            "Bidding interval": gens_df["mc"] * 2,
+            "Bidding interval": gens_df["mc"],
         }
     )
 
@@ -414,7 +409,6 @@ if __name__ == "__main__":
         df,
         x="Unit",
         y=["Marginal cost", "Bidding interval"],
-        barmode="group",  # Set the barmode to "group" for side-by-side bars
         title="Marginal costs",
         labels={"x": "Unit", "y": "Marginal cost [€/MWh]"},
     )
@@ -437,9 +431,9 @@ if __name__ == "__main__":
     fig.update_yaxes(range=[0, 200])
 
     # save plot as html
-    fig.write_html(f"outputs/{case}/marginal_costs.html")
+    # fig.write_html(f"outputs/{case}/marginal_costs.html")
     # save plot as pdf
-    fig.write_image(f"outputs/{case}/marginal_costs.pdf")
+    # fig.write_image(f"outputs/{case}/marginal_costs.pdf")
 
     fig.show()
 
@@ -466,69 +460,6 @@ if __name__ == "__main__":
     fig.write_html(f"outputs/{case}/mcp.html")
     # save plot as pdf
     fig.write_image(f"outputs/{case}/mcp.pdf")
-    fig.show()
-
-    # %%
-    # plot profits_method_2 and updated_profits_method_2 for opt_gen
-    profits = pd.concat(
-        [
-            profits_method_1[opt_gen],
-            updated_profits_method_1[opt_gen],
-            profits_method_2[opt_gen],
-            updated_profits_method_2[opt_gen],
-        ],
-        axis=1,
-    )
-    profits.columns = [
-        "Method 1",
-        "Method 1 (after UC)",
-        "Method 2",
-        "Method 2 (after UC)",
-    ]
-
-    profits = profits.apply(pd.to_numeric, errors="coerce")
-    fig = px.bar(
-        title=f"Total profits of Unit {opt_gen+1}",
-        labels={"index": "Method", "Profit": "Profit [€]"},
-    )
-
-    # add Method 1 bar
-    fig.add_bar(
-        x=["Method 1"],
-        y=[profits["Method 1"].sum()],
-        name="Method 1",
-    )
-
-    # add Method 1 (after UC) bar
-    fig.add_bar(
-        x=["Method 1 (after UC)"],
-        y=[profits["Method 1 (after UC)"].sum()],
-        name="Method 1 (after UC)",
-    )
-
-    # add Method 2 bar
-    fig.add_bar(
-        x=["Method 2"],
-        y=[profits["Method 2"].sum()],
-        name="Method 2",
-    )
-
-    # add Method 2 (after UC) bar
-    fig.add_bar(
-        x=["Method 2 (after UC)"],
-        y=[profits["Method 2 (after UC)"].sum()],
-        name="Method 2 (after UC)",
-    )
-
-    # display values on top of bars
-    fig.update_traces(texttemplate="%{y:.0f}", textposition="outside")
-
-    # disable legend
-    fig.update_layout(showlegend=False)
-
-    # save plot as pdf
-    fig.write_image(f"outputs/{case}/profits.pdf")
-
     fig.show()
 
 

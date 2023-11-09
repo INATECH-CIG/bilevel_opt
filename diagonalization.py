@@ -21,8 +21,9 @@ def run_diagonalization(
     end,
     method,
     k_max=2,
-    time_limit=30,
-    big_w=10000,
+    K=10,
+    time_limit=180,
+    big_w=10,
     print_results=False,
 ):
     if method == "method_1":
@@ -66,6 +67,7 @@ def run_diagonalization(
                     big_w=big_w,
                     time_limit=time_limit,
                     print_results=print_results,
+                    K=10,
                 )
             except Exception as e:
                 print(f"Error: {e}")
