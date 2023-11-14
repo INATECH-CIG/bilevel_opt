@@ -14,12 +14,12 @@ from utils import calculate_profits, calculate_uplift
 # %%
 if __name__ == "__main__":
     case = "Case_1"
-    opt_gen = 1  # generator that is allowed to bid strategically
+    opt_gen = 0 # generator that is allowed to bid strategically
 
     big_w = 10  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
     time_limit = 300  # time limit in seconds for each optimization
-    K = 10
+    K = 5
 
     start = pd.to_datetime("2019-03-02 06:00")
     end = pd.to_datetime("2019-03-02 14:00")
@@ -265,7 +265,7 @@ if __name__ == "__main__":
     fig.update_layout(showlegend=False)
 
     # save plot as pdf
-    # fig.write_image(f"outputs/{case}/profits_{opt_gen}.pdf")
+    fig.write_image(f"outputs/{case}/profits_{opt_gen}.pdf")
 
     # save plot as html
     # fig.write_html(f"outputs/{case}/profits_{opt_gen}.html")
@@ -329,7 +329,7 @@ if __name__ == "__main__":
     # save plot as html
     # fig.write_html(f"outputs/{case}/dispatch_{opt_gen}.html")
     # save plot as pdf
-    # fig.write_image(f"outputs/{case}/dispatch_{opt_gen}.pdf")
+    fig.write_image(f"outputs/{case}/dispatch_{opt_gen}.pdf")
     fig.show()
 
     # %% Market clearing price
@@ -358,7 +358,7 @@ if __name__ == "__main__":
     # save plot as html
     # fig.write_html(f"outputs/{case}/mcp_{opt_gen}.html")
     # save plot as pdf
-    # fig.write_image(f"outputs/{case}/mcp_{opt_gen}.pdf")
+    fig.write_image(f"outputs/{case}/mcp_{opt_gen}.pdf")
     fig.show()
 
     # %%
@@ -401,9 +401,10 @@ if __name__ == "__main__":
             "Unit": gens_df.index,
             "Marginal cost": gens_df["mc"],
             "Bidding interval": gens_df["mc"],
+            "Total interval": 2 * gens_df["mc"],
         }
     )
-
+    df.at[3, "Bidding interval"] = 0
     # Create the figure object
     fig = px.bar(
         df,
@@ -418,9 +419,12 @@ if __name__ == "__main__":
 
     # Set the opacity of the second set of bars to make them semitransparent
     fig.update_traces(opacity=0.6, selector=dict(name="Bidding interval"))
+    
+    # display the values from df["Total interval"] on top of the red bar
+    fig.update_traces(text=df["Total interval"], selector=dict(name="Bidding interval"))
 
-    # display values on top of bars
-    fig.update_traces(texttemplate="%{y:.0f}", textposition="outside")
+    # display the values from df["Marginal cost"] on top of the blue bar
+    fig.update_traces(text=df["Marginal cost"], selector=dict(name="Marginal cost"))
 
     # display the legend below the plot
     fig.update_layout(
@@ -433,7 +437,7 @@ if __name__ == "__main__":
     # save plot as html
     # fig.write_html(f"outputs/{case}/marginal_costs.html")
     # save plot as pdf
-    # fig.write_image(f"outputs/{case}/marginal_costs.pdf")
+    fig.write_image(f"outputs/{case}/marginal_costs.pdf")
 
     fig.show()
 
