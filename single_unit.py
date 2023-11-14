@@ -14,15 +14,15 @@ from utils import calculate_profits, calculate_uplift
 # %%
 if __name__ == "__main__":
     case = "Case_1"
-    opt_gen = 0 # generator that is allowed to bid strategically
+    opt_gen = 1 # generator that is allowed to bid strategically
 
-    big_w = 10  # weight for duality gap objective
+    big_w = 1  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
     time_limit = 300  # time limit in seconds for each optimization
-    K = 5
+    K = 3
 
-    start = pd.to_datetime("2019-03-02 06:00")
-    end = pd.to_datetime("2019-03-02 14:00")
+    start = pd.to_datetime("2019-03-02 00:00")
+    end = pd.to_datetime("2019-03-02 23:00")
 
     # gens
     gens_df = pd.read_csv(f"inputs/{case}/gens.csv", index_col=0)

@@ -63,7 +63,7 @@ def find_optimal_k_method_2(
 
     # binary expansion constraints
     def g_binary_rule(model, t):
-        return model.g[opt_gen, t] <= delta[opt_gen] * sum(
+        return model.g[opt_gen, t] == delta[opt_gen] * sum(
             pow(2, k) * model.g_binary[t, k] for k in range(K)
         )
 
@@ -504,9 +504,10 @@ def find_optimal_k_method_2(
     options = {
         "LogToConsole": print_results,
         "TimeLimit": time_limit,
-        "PreSOS1BigM": 0,
+        "PreSOS1BigM": -1,
+        "MIPGap": 0.02,
+        "MIPFocus": 2,
     }
-
     results = solver.solve(instance, options=options, tee=print_results)
 
     if (
@@ -569,12 +570,12 @@ def find_optimal_k_method_2(
 if __name__ == "__main__":
     case = "Case_1"
 
-    big_w = 10  # weight for duality gap objective
+    big_w = 1  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
     opt_gen = 1  # generator that is allowed to bid strategically
 
     start = pd.to_datetime("2019-03-02 00:00")
-    end = pd.to_datetime("2019-03-02 12:00")
+    end = pd.to_datetime("2019-03-02 23:00")
 
     # gens
     gens_df = pd.read_csv(f"inputs/{case}/gens.csv", index_col=0)
@@ -597,7 +598,7 @@ if __name__ == "__main__":
         big_w=big_w,
         time_limit=180,
         print_results=True,
-        K=10,
+        K=3,
     )
 
     print(main_df)
