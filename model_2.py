@@ -1,8 +1,8 @@
 # %%
 import pandas as pd
 import pyomo.environ as pyo
-from pyomo.opt import SolverFactory
 from pyomo.contrib.iis import write_iis
+from pyomo.opt import SolverFactory
 
 
 def find_optimal_k_method_2(
@@ -334,9 +334,7 @@ def find_optimal_k_method_2(
 
     def kkt_demand_rule(model, t):
         return (
-            -demand_df.at[t, "price"]
-            + model.lambda_hat[t]
-            + model.nu_max_hat[t]
+            -demand_df.at[t, "price"] + model.lambda_hat[t] + model.nu_max_hat[t]
             # - model.nu_min_hat[t]
             >= 0
         )

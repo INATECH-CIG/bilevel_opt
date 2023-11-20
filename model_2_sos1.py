@@ -1,8 +1,8 @@
 # %%
 import pandas as pd
 import pyomo.environ as pyo
-from pyomo.opt import SolverFactory
 from pyomo.contrib.iis import write_iis
+from pyomo.opt import SolverFactory
 
 
 def find_optimal_k_method_2(

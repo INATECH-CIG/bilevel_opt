@@ -4,8 +4,6 @@ import os
 import pandas as pd
 import plotly.express as px
 
-# from model_1 import find_optimal_k_method_1 as method_1
-# from model_2 import find_optimal_k_method_2 as method_2
 from model_1 import find_optimal_k_method_1 as method_1
 from model_2 import find_optimal_k_method_2 as method_2
 from uc_problem import solve_uc_problem
@@ -14,15 +12,15 @@ from utils import calculate_profits, calculate_uplift
 # %%
 if __name__ == "__main__":
     case = "Case_1"
-    opt_gen = 1 # generator that is allowed to bid strategically
+    opt_gen = 1  # generator that is allowed to bid strategically
 
     big_w = 1  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
     time_limit = 300  # time limit in seconds for each optimization
     K = 3
 
-    start = pd.to_datetime("2019-03-02 00:00")
-    end = pd.to_datetime("2019-03-02 23:00")
+    start = pd.to_datetime("2019-03-02 06:00")
+    end = pd.to_datetime("2019-03-02 14:00")
 
     # gens
     gens_df = pd.read_csv(f"inputs/{case}/gens.csv", index_col=0)
@@ -145,10 +143,6 @@ if __name__ == "__main__":
         profits=updated_profits_method_2[opt_gen].sum(),
     )
 
-    total_profit_with_uplift_method_2 = (
-        updated_profits_method_2[opt_gen].sum() + uplift_method_2
-    )
-
     # %% RL Part
     market_orders = pd.read_csv(
         f"{path}/market_orders.csv",
@@ -176,10 +170,6 @@ if __name__ == "__main__":
         gens_df=gens_df,
         gen_unit=opt_gen,
         profits=profits_method_3[opt_gen].sum(),
-    )
-
-    total_profit_with_uplift_method_3 = (
-        profits_method_3[opt_gen].sum() + uplift_method_3
     )
 
     # %%
@@ -218,26 +208,11 @@ if __name__ == "__main__":
         name="Method 2",
     )
 
-    # add an extra bar of the total profit with uplift
-    # use the same color as the original bar
-    fig.add_bar(
-        x=["Method 2 (with uplift)"],
-        y=[total_profit_with_uplift_method_2],
-        name="Method 2 with uplift",
-    )
-
     # add Method 3 (RL) bar
     fig.add_bar(
         x=["Method 3 (RL)"],
         y=[profits["Method 3 (RL)"].sum()],
         name="Method 3 (RL)",
-    )
-
-    # add rl with uplift
-    fig.add_bar(
-        x=["Method 3 (RL with uplift)"],
-        y=[total_profit_with_uplift_method_3],
-        name="Method 3 (RL) with uplift",
     )
 
     # make all bares with Method 1 in name blue
@@ -419,7 +394,7 @@ if __name__ == "__main__":
 
     # Set the opacity of the second set of bars to make them semitransparent
     fig.update_traces(opacity=0.6, selector=dict(name="Bidding interval"))
-    
+
     # display the values from df["Total interval"] on top of the red bar
     fig.update_traces(text=df["Total interval"], selector=dict(name="Bidding interval"))
 

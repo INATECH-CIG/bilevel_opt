@@ -12,14 +12,14 @@ from utils import calculate_profits
 # %%
 if __name__ == "__main__":
     case = "Case_1"
-    method = "method_2"
+    method = "method_1"
 
-    big_w = 10  # weight for duality gap objective
+    big_w = 1  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
     time_limit = 300  # time limit in seconds for each optimization
 
-    start = pd.to_datetime("2019-03-02 06:00")
-    end = pd.to_datetime("2019-03-02 14:00")
+    start = pd.to_datetime("2019-03-02 00:00")
+    end = pd.to_datetime("2019-03-02 23:00")
 
     # gens
     gens_df = pd.read_csv(f"inputs/{case}/gens.csv", index_col=0)
@@ -58,10 +58,14 @@ if __name__ == "__main__":
 
     # %%
     new_k_values = k_values_df.copy()
-    profits_method_1 = pd.DataFrame(index=demand_df.index, columns=gens_df.index, data=0.0)
+    profits_method_1 = pd.DataFrame(
+        index=demand_df.index, columns=gens_df.index, data=0.0
+    )
 
     print(f"Solving using {method}")
     for opt_gen in gens_df.index:
+        if opt_gen == 3:
+            continue
         print(f"Optimizing for Unit {opt_gen+1}")
         main_df, supp_df, k_values = find_optimal_k(
             gens_df=gens_df,
@@ -72,6 +76,7 @@ if __name__ == "__main__":
             big_w=big_w,
             time_limit=time_limit,
             print_results=print_results,
+            K=3,
         )
 
         new_k_values.loc[:, opt_gen] = k_values["k"]
@@ -86,7 +91,7 @@ if __name__ == "__main__":
     # %%
     total_profits_method_1 = pd.DataFrame(
         index=profits_method_1.columns,
-        columns=["Method 1"],
+        columns=["after bi-level opt."],
         data=profits_method_1.sum(),
     ).astype(float)
 
@@ -96,7 +101,7 @@ if __name__ == "__main__":
         data=profits_method_3.sum(),
     ).astype(float)
 
-    all_profits = pd.concat([total_profits_method_1, total_profits_method_3], axis=1)
+    all_profits = pd.concat([total_profits_method_3, total_profits_method_1], axis=1)
     all_profits /= 1000
     all_profits = all_profits.round()
 
@@ -105,7 +110,7 @@ if __name__ == "__main__":
     # plot the profits as bars
     fig = px.bar(
         all_profits,
-        x=all_profits.index+1,
+        x=all_profits.index + 1,
         y=all_profits.columns,
         title="Total profit per unit",
         labels={"index": "Unit", "Profit": "Profit [k€]"},
