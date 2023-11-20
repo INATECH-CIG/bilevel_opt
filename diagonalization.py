@@ -21,7 +21,7 @@ def run_diagonalization(
     end,
     method,
     k_max=2,
-    K=10,
+    K=3,
     time_limit=180,
     big_w=10,
     print_results=False,
@@ -45,9 +45,9 @@ def run_diagonalization(
     profit_values = pd.DataFrame(columns=gens_df.index, index=demand_df.index, data=0.0)
     print(f"Starting diagonalization using {method}")
 
-    max_average_profits = -1e6
-    iterations_without_change = 0
     i = 1
+    lowest_diff_in_profits = profit_values.copy()
+    lowest_diff_in_profits = lowest_diff_in_profits.sum(axis=0) + 10e6
     while True:
         print()
         print(f"Iteration {i}")
@@ -56,6 +56,8 @@ def run_diagonalization(
 
         # iterate over units in reverse order
         for opt_gen in gens_df.index:
+            if opt_gen == 3:
+                continue
             print(f"Optimizing for Unit {opt_gen+1}")
             try:
                 main_df, supp_df, k = find_optimal_k(
@@ -67,7 +69,7 @@ def run_diagonalization(
                     big_w=big_w,
                     time_limit=time_limit,
                     print_results=print_results,
-                    K=10,
+                    K=K,
                 )
             except Exception as e:
                 print(f"Error: {e}")
@@ -81,7 +83,6 @@ def run_diagonalization(
 
         diff_in_k = k_values_df - last_k_values
         diff_in_profit = profit_values.sum(axis=0) - last_profit_values.sum(axis=0)
-        diff_in_profit /= 1000
 
         print("Difference in profits:")
         print(diff_in_profit)
@@ -90,27 +91,18 @@ def run_diagonalization(
             print(f"Actions did not change. Convergence reached at iteration {i}")
             break
 
-        if (abs(diff_in_profit) < 1).all():
+        if (abs(diff_in_profit) < 3000).all():
             print(f"Profits did not change. Convergence reached at iteration {i}")
             break
 
-        average_profits = profit_values.mean(axis=1).mean()
-        print("Average profit", average_profits)
-
-        if average_profits > max_average_profits:
-            print("New best solution found. Saving results...")
-            max_average_profits = average_profits
-
-            # save preliminary results
-            save_results_path = f"outputs/{case}/{method}/preliminary"
-            save_results(save_results_path, main_df, supp_df, k_values_df)
-            iterations_without_change = 0
-        else:
-            iterations_without_change += 1
-
-        if iterations_without_change > 10:
-            print("No improvement in 10 iterations. Stopping.")
+        if (abs(diff_in_profit) <= 0.01*profit_values.sum(axis=0)).all():
+            print(f"Profits change is below threshold. Convergence reached at iteration {i}")
             break
+
+        if (diff_in_profit <= lowest_diff_in_profits).all():
+            lowest_diff_in_profits = diff_in_profit
+            save_results_path = f"outputs/{case}/{method}/temp"
+            save_results(save_results_path, main_df, supp_df, k_values_df)
 
         i += 1
 
@@ -138,12 +130,13 @@ def save_results(save_results_path, main_df, supp_df, k_values_df):
 if __name__ == "__main__":
     case = "Case_1"
 
-    big_w = 10000  # weight for duality gap objective
+    big_w = 10  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
-    time_limit = 30  # time limit in seconds for each optimization
+    time_limit = 1000  # time limit in seconds for each optimization
+    K = 3
 
-    start = pd.to_datetime("2019-03-02 00:00")
-    end = pd.to_datetime("2019-03-03 00:00")
+    start = pd.to_datetime("2019-03-02 06:00")
+    end = pd.to_datetime("2019-03-02 14:00")
 
     print_results = False
     solve_diag = True
@@ -160,6 +153,7 @@ if __name__ == "__main__":
             time_limit=time_limit,
             big_w=big_w,
             print_results=print_results,
+            K=K,
         )
 
 # %%
