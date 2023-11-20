@@ -3,6 +3,8 @@ import pandas as pd
 import pyomo.environ as pyo
 from pyomo.opt import SolverFactory
 
+from uc_problem import solve_uc_problem
+
 
 def find_optimal_k_method_1(
     gens_df,
@@ -308,8 +310,8 @@ def find_optimal_k_method_1(
     options = {
         "LogToConsole": print_results,
         "TimeLimit": time_limit,
-        "MIPGap": 0.02,
-        "MIPFocus": 2,
+        # "MIPGap": 0.02,
+        # "MIPFocus": 2,
     }
 
     results = solver.solve(instance, options=options, tee=print_results)
@@ -362,12 +364,12 @@ def find_optimal_k_method_1(
 if __name__ == "__main__":
     case = "Case_1"
 
-    big_w = 1  # weight for duality gap objective
+    big_w = 10  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
     opt_gen = 1  # generator that is allowed to bid strategically
 
-    start = pd.to_datetime("2019-03-02 00:00")
-    end = pd.to_datetime("2019-03-02 23:00")
+    start = pd.to_datetime("2019-03-02 06:00")
+    end = pd.to_datetime("2019-03-02 14:00")
 
     # gens
     gens_df = pd.read_csv(f"inputs/{case}/gens.csv", index_col=0)
@@ -390,10 +392,21 @@ if __name__ == "__main__":
         big_w=big_w,
         time_limit=300,
         print_results=True,
-        K=3,
+        K=10,
     )
 
     print(main_df)
     print()
     print(k_values)
     # %%
+    k_values_df_1 = k_values_df.copy()
+    k_values_df_1[opt_gen] = k_values
+
+    updated_main_df_1, updated_supp_df_1 = solve_uc_problem(
+        gens_df, demand_df, k_values_df_1
+    )
+
+    save_path = f"outputs/{case}/gen_{opt_gen}"
+    k_values.to_csv(f"{save_path}/k_values_1.csv")
+    updated_main_df_1.to_csv(f"{save_path}/updated_main_df_1.csv")
+    updated_supp_df_1.to_csv(f"{save_path}/updated_supp_df_1.csv")

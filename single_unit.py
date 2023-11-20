@@ -7,17 +7,16 @@ import plotly.express as px
 from model_1 import find_optimal_k_method_1 as method_1
 from model_2 import find_optimal_k_method_2 as method_2
 from uc_problem import solve_uc_problem
-from utils import calculate_profits, calculate_uplift
+from utils import calculate_profits
 
 # %%
 if __name__ == "__main__":
     case = "Case_1"
-    opt_gen = 1  # generator that is allowed to bid strategically
+    opt_gen = 2  # generator that is allowed to bid strategically
 
-    big_w = 1  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
-    time_limit = 300  # time limit in seconds for each optimization
-    K = 3
+    time_limit = 3600  # time limit in seconds for each optimization
+    K = 10
 
     start = pd.to_datetime("2019-03-02 06:00")
     end = pd.to_datetime("2019-03-02 14:00")
@@ -35,7 +34,7 @@ if __name__ == "__main__":
     k_values_df = pd.DataFrame(columns=gens_df.index, index=demand_df.index, data=1.0)
 
     print_results = False
-    optimize = True
+    optimize = False
 
     save_path = f"outputs/{case}/gen_{opt_gen}"
     # check if path exists
@@ -51,7 +50,7 @@ if __name__ == "__main__":
             demand_df=demand_df,
             k_max=k_max,
             opt_gen=opt_gen,
-            big_w=big_w,
+            big_w=100,
             time_limit=time_limit,
             print_results=print_results,
             K=K,
@@ -67,8 +66,6 @@ if __name__ == "__main__":
             gens_df, demand_df, k_values_df_1
         )
 
-        prices = pd.concat([main_df_1["mcp"], updated_main_df_1["mcp"]], axis=1)
-
         print("Solving using Method 2")
         main_df_2, supp_df_2, k_values_2 = method_2(
             gens_df=gens_df,
@@ -76,7 +73,7 @@ if __name__ == "__main__":
             demand_df=demand_df,
             k_max=k_max,
             opt_gen=opt_gen,
-            big_w=big_w,
+            big_w=10,
             time_limit=time_limit,
             print_results=print_results,
             K=K,
@@ -97,11 +94,6 @@ if __name__ == "__main__":
         k_values.columns = ["Method 1", "Method 2"]
         # print("Merged k values")
         # print(k_values)
-
-        prices = pd.concat([main_df_2["mcp_hat"], updated_main_df_2["mcp"]], axis=1)
-        power = pd.concat(
-            [main_df_2[f"gen_{opt_gen}"], updated_main_df_2[f"gen_{opt_gen}"]], axis=1
-        )
 
         # save all results to csv
         k_values_1.to_csv(f"{save_path}/k_values_1.csv")
@@ -135,14 +127,6 @@ if __name__ == "__main__":
         updated_main_df_2, updated_supp_df_2, gens_df, price_column="mcp"
     )
 
-    # calculate uplifts
-    uplift_method_2, uplift_df_method_2 = calculate_uplift(
-        main_df=updated_main_df_2,
-        gens_df=gens_df,
-        gen_unit=opt_gen,
-        profits=updated_profits_method_2[opt_gen].sum(),
-    )
-
     # %% RL Part
     market_orders = pd.read_csv(
         f"{path}/market_orders.csv",
@@ -163,14 +147,6 @@ if __name__ == "__main__":
 
     main_df_3.to_csv(f"{save_path}/updated_main_df_3.csv")
     supp_df_3.to_csv(f"{save_path}/updated_supp_df_3.csv")
-
-    # calculate uplifts
-    uplift_method_3, uplift_df_method_3 = calculate_uplift(
-        main_df=main_df_3,
-        gens_df=gens_df,
-        gen_unit=opt_gen,
-        profits=profits_method_3[opt_gen].sum(),
-    )
 
     # %%
     # plot sum of both profits as bar chart

@@ -1,8 +1,9 @@
 # %%
 import pandas as pd
 import pyomo.environ as pyo
-from pyomo.contrib.iis import write_iis
 from pyomo.opt import SolverFactory
+
+from uc_problem import solve_uc_problem
 
 
 def find_optimal_k_method_2(
@@ -50,7 +51,7 @@ def find_optimal_k_method_2(
     model.mu_max_hat = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
     model.mu_min_hat = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
     model.nu_max_hat = pyo.Var(model.time, within=pyo.NonNegativeReals)
-    # model.nu_min_hat = pyo.Var(model.time, within=pyo.NonNegativeReals)
+    model.nu_min_hat = pyo.Var(model.time, within=pyo.NonNegativeReals)
     model.pi_u_hat = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
     model.pi_d_hat = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
 
@@ -64,7 +65,7 @@ def find_optimal_k_method_2(
 
     # binary expansion constraints
     def g_binary_rule(model, t):
-        return model.g[opt_gen, t] == delta[opt_gen] * sum(
+        return model.g[opt_gen, t] <= delta[opt_gen] * sum(
             pow(2, k) * model.g_binary[t, k] for k in range(K)
         )
 
@@ -334,9 +335,11 @@ def find_optimal_k_method_2(
 
     def kkt_demand_rule(model, t):
         return (
-            -demand_df.at[t, "price"] + model.lambda_hat[t] + model.nu_max_hat[t]
-            # - model.nu_min_hat[t]
-            >= 0
+            -demand_df.at[t, "price"]
+            + model.lambda_hat[t]
+            + model.nu_max_hat[t]
+            - model.nu_min_hat[t]
+            == 0
         )
 
     model.kkt_demand = pyo.Constraint(model.time, rule=kkt_demand_rule)
@@ -417,28 +420,21 @@ def find_optimal_k_method_2(
         model.time, rule=nu_max_hat_binary_rule_3
     )
 
-    # model.nu_min_hat_binary = pyo.Var(model.time, within=pyo.Binary)
+    model.nu_min_hat_binary = pyo.Var(model.time, within=pyo.Binary)
 
-    # def nu_min_hat_binary_rule_1(model, t):
-    #     return model.d[t] <= max(demand_df["volume"]) * (1 - model.nu_min_hat_binary[t])
+    def nu_min_hat_binary_rule_1(model, t):
+        return model.d[t] <= big_M * (1 - model.nu_min_hat_binary[t])
 
-    # def nu_min_hat_binary_rule_2(model, t):
-    #     return model.d[t] >= -max(demand_df["volume"]) * (
-    #         1 - model.nu_min_hat_binary[t]
-    #     )
+    def nu_min_hat_binary_rule_3(model, t):
+        return model.nu_min_hat[t] <= big_M * model.nu_min_hat_binary[t]
 
-    # def nu_min_hat_binary_rule_3(model, t):
-    #     return model.nu_min_hat[t] <= big_M * model.nu_min_hat_binary[t]
+    model.nu_min_hat_binary_constr_1 = pyo.Constraint(
+        model.time, rule=nu_min_hat_binary_rule_1
+    )
 
-    # model.nu_min_hat_binary_constr_1 = pyo.Constraint(
-    #     model.time, rule=nu_min_hat_binary_rule_1
-    # )
-    # model.nu_min_hat_binary_constr_2 = pyo.Constraint(
-    #     model.time, rule=nu_min_hat_binary_rule_2
-    # )
-    # model.nu_min_hat_binary_constr_3 = pyo.Constraint(
-    #     model.time, rule=nu_min_hat_binary_rule_3
-    # )
+    model.nu_min_hat_binary_constr_3 = pyo.Constraint(
+        model.time, rule=nu_min_hat_binary_rule_3
+    )
 
     model.pi_u_hat_binary = pyo.Var(model.gens, model.time, within=pyo.Binary)
 
@@ -517,19 +513,11 @@ def find_optimal_k_method_2(
     options = {
         "LogToConsole": print_results,
         "TimeLimit": time_limit,
-        "MIPGap": 0.02,
-        "MIPFocus": 2,
+        # "MIPGap": 0.02,
+        # "MIPFocus": 2,
     }
 
     results = solver.solve(instance, options=options, tee=print_results)
-
-    if (
-        results.solver.termination_condition
-        == pyo.TerminationCondition.infeasibleOrUnbounded
-    ):
-        # If the model was infeasible, extract the IIS
-        instance.solutions.store_to(results)
-        write_iis(model, "iis.ilp")
 
     # check if solver exited due to time limit
     if results.solver.termination_condition == pyo.TerminationCondition.maxTimeLimit:
@@ -587,8 +575,8 @@ if __name__ == "__main__":
     k_max = 2  # maximum multiplier for strategic bidding
     opt_gen = 1  # generator that is allowed to bid strategically
 
-    start = pd.to_datetime("2019-03-02 00:00")
-    end = pd.to_datetime("2019-03-02 23:00")
+    start = pd.to_datetime("2019-03-02 06:00")
+    end = pd.to_datetime("2019-03-02 14:00")
 
     # gens
     gens_df = pd.read_csv(f"inputs/{case}/gens.csv", index_col=0)
@@ -609,9 +597,9 @@ if __name__ == "__main__":
         k_max=k_max,
         opt_gen=opt_gen,
         big_w=big_w,
-        time_limit=500,
+        time_limit=3600,
         print_results=True,
-        K=2,
+        K=3,
         big_M=10e6,
     )
 
@@ -619,3 +607,14 @@ if __name__ == "__main__":
     print()
     print(k_values)
     # %%
+    k_values_df_2 = k_values_df.copy()
+    k_values_df_2[opt_gen] = k_values
+
+    updated_main_df_2, updated_supp_df_2 = solve_uc_problem(
+        gens_df, demand_df, k_values_df_2
+    )
+
+    save_path = f"outputs/{case}/gen_{opt_gen}"
+    k_values.to_csv(f"{save_path}/k_values_2.csv")
+    updated_main_df_2.to_csv(f"{save_path}/updated_main_df_2.csv")
+    updated_supp_df_2.to_csv(f"{save_path}/updated_supp_df_2.csv")
