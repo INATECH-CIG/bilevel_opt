@@ -117,17 +117,19 @@ def find_optimal_k_method_1(
     def duality_gap_part_1_rule(model):
         expr = sum(
             (
-                gens_df.at[gen, "mc"]
-                * delta[gen]
-                * sum(pow(2, n) * model.z_k[t, n] for n in range(K))
-                + model.c_up[gen, t]
-                + model.c_down[gen, t]
-            )
-            if gen == opt_gen
-            else (
-                k_values_df.at[t, gen] * gens_df.at[gen, "mc"] * model.g[gen, t]
-                + model.c_up[gen, t]
-                + model.c_down[gen, t]
+                (
+                    gens_df.at[gen, "mc"]
+                    * delta[gen]
+                    * sum(pow(2, n) * model.z_k[t, n] for n in range(K))
+                    + model.c_up[gen, t]
+                    + model.c_down[gen, t]
+                )
+                if gen == opt_gen
+                else (
+                    k_values_df.at[t, gen] * gens_df.at[gen, "mc"] * model.g[gen, t]
+                    + model.c_up[gen, t]
+                    + model.c_down[gen, t]
+                )
             )
             for gen in model.gens
             for t in model.time
@@ -311,7 +313,7 @@ def find_optimal_k_method_1(
         "LogToConsole": print_results,
         "TimeLimit": time_limit,
         "MIPGap": 0.02,
-        "MIPFocus": 3,
+        # "MIPFocus": 3,
     }
 
     results = solver.solve(instance, options=options, tee=print_results)

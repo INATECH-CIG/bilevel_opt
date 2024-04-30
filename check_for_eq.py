@@ -48,7 +48,7 @@ if __name__ == "__main__":
 
     main_df_3, supp_df_3 = solve_uc_problem(gens_df, demand_df, k_values_df)
     profits_method_3 = calculate_profits(main_df_3, supp_df_3, gens_df)
-    
+
     total_profits_method_3 = pd.DataFrame(
         index=gens_df.index,
         columns=["DRL"],
@@ -57,16 +57,14 @@ if __name__ == "__main__":
 
     # %%
     total_profits = pd.DataFrame(
-    index=gens_df.index,
-    columns=["method_1", "method_2"],
-    data=0.0,
+        index=gens_df.index,
+        columns=["method_1", "method_2"],
+        data=0.0,
     ).astype(float)
 
     for method in ["method_1", "method_2"]:
         new_k_values = k_values_df.copy()
-        profits = pd.DataFrame(
-            index=demand_df.index, columns=gens_df.index, data=0.0
-        )
+        profits = pd.DataFrame(index=demand_df.index, columns=gens_df.index, data=0.0)
         if method == "method_1":
             find_optimal_k = method_1
             big_w = 100  # weight for duality gap objective
@@ -111,7 +109,7 @@ if __name__ == "__main__":
     # drop index 3
     all_profits = all_profits.drop(3)
 
-    #rename index to i+1
+    # rename index to i+1
     all_profits.index = all_profits.index + 1
 
     all_profits = all_profits.astype(float)

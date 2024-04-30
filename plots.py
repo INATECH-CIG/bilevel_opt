@@ -26,7 +26,7 @@ font_size = 22
 fig = px.line(
     demand_df,
     x=demand_df.index,  # Assuming 'Time' is a column in demand_df
-    y='volume',
+    y="volume",
     labels={"volume": "Demand [MWh]"},
     # title='Demand Profile Over Time'
 )
@@ -34,12 +34,12 @@ fig = px.line(
 # Add capacity of each unit as horizontal line and accumulate the capacity
 capacity = 0
 for i, row in gens_df.iterrows():
-    capacity += row['g_max']
+    capacity += row["g_max"]
     fig.add_hline(
-        y=capacity, 
-        line_dash="dash", 
+        y=capacity,
+        line_dash="dash",
         annotation_text=f"Unit {i+1} capacity: {row['g_max']} MW",
-        annotation_position="top right"
+        annotation_position="top right",
     )
 
 # Update y-axis range and title
@@ -50,10 +50,12 @@ fig.update_xaxes(title_text="Time Step")
 
 # Enhance the layout
 fig.update_layout(
-    template='plotly_white',  # Clean and professional template
+    template="plotly_white",  # Clean and professional template
     showlegend=False,
     margin=dict(l=20, r=20, t=20, b=20),  # Adjust margins to fit the title
-    font=dict(size=font_size, family='Arial', color='black') # Set global font size and family
+    font=dict(
+        size=font_size, family="Arial", color="black"
+    ),  # Set global font size and family
 )
 
 # Save plot as PDF
@@ -68,7 +70,7 @@ fig.show()
 
 df = pd.DataFrame(
     {
-        "Unit": gens_df.index[:3]+1,
+        "Unit": gens_df.index[:3] + 1,
         "Marginal cost": gens_df["mc"][:3],
         "Bidding interval": gens_df["mc"][:3],
         "Total interval": 2 * gens_df["mc"][:3],
@@ -87,25 +89,34 @@ fig = px.bar(
 fig.update_traces(opacity=1, selector=dict(name="Bidding interval"))
 
 # Display the values from df["Bidding interval"] on top of the bidding interval bars
-fig.update_traces(text=df["Total interval"], textposition='outside', selector=dict(name="Bidding interval"), textfont=dict(color='black'))
+fig.update_traces(
+    text=df["Total interval"],
+    textposition="outside",
+    selector=dict(name="Bidding interval"),
+    textfont=dict(color="black"),
+)
 
 # Display the values from df["Marginal cost"] on top of the marginal cost bars
-fig.update_traces(text=df["Marginal cost"], textposition='outside', selector=dict(name="Marginal cost"))
+fig.update_traces(
+    text=df["Marginal cost"],
+    textposition="outside",
+    selector=dict(name="Marginal cost"),
+)
 
 # Update layout for a cleaner look
 fig.update_layout(
-    legend_title_text=' ',
+    legend_title_text=" ",
     legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
     margin=dict(l=20, r=20, t=50, b=20),
-    font=dict(size=font_size, family='Arial', color='black'),
-    template='plotly_white'
+    font=dict(size=font_size, family="Arial", color="black"),
+    template="plotly_white",
 )
 
 # Set y-axis range and title
 fig.update_yaxes(range=[0, 200], title_text="Marginal cost [€/MWh]")
 
 # Set x-axis to only show integer labels
-fig.update_xaxes(tickvals=df['Unit'])
+fig.update_xaxes(tickvals=df["Unit"])
 
 # Save plot as PDF
 fig.write_image(f"outputs/{case}/marginal_costs.pdf")

@@ -4,6 +4,7 @@ Created by: Nick Harder (nick.harder94@gmail.com)
 Created on August, 21th, 2023
 
 """
+
 # %%
 import os
 
@@ -95,8 +96,10 @@ def run_diagonalization(
             print(f"Profits did not change. Convergence reached at iteration {i}")
             break
 
-        if (abs(diff_in_profit) <= 0.01*profit_values.sum(axis=0)).all():
-            print(f"Profits change is below threshold. Convergence reached at iteration {i}")
+        if (abs(diff_in_profit) <= 0.01 * profit_values.sum(axis=0)).all():
+            print(
+                f"Profits change is below threshold. Convergence reached at iteration {i}"
+            )
             break
 
         if (diff_in_profit <= lowest_diff_in_profits).all():

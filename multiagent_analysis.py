@@ -28,9 +28,7 @@ k_values_1.columns = k_values_1.columns.astype(int)
 # get true prices and profiles
 updated_main_df_1, updated_supp_df_1 = solve_uc_problem(gens_df, demand_df, k_values_1)
 
-profits_method_1 = calculate_profits(
-    updated_main_df_1, updated_supp_df_1, gens_df
-)
+profits_method_1 = calculate_profits(updated_main_df_1, updated_supp_df_1, gens_df)
 # make a dataframe with the total profits per unit
 total_profits_method_1 = pd.DataFrame(
     index=profits_method_1.columns,
@@ -45,9 +43,7 @@ k_values_2 = pd.read_csv(f"outputs/{case}/method_2/k_values_df.csv", index_col=0
 k_values_2.columns = k_values_2.columns.astype(int)
 
 updated_main_df_2, updated_supp_df_2 = solve_uc_problem(gens_df, demand_df, k_values_2)
-profits_method_2 = calculate_profits(
-    updated_main_df_2, updated_supp_df_2, gens_df
-)
+profits_method_2 = calculate_profits(updated_main_df_2, updated_supp_df_2, gens_df)
 
 total_profits_method_2 = pd.DataFrame(
     index=profits_method_2.columns,
@@ -84,7 +80,9 @@ sum_rl_profits = pd.DataFrame(
 # %%
 # merge all profits
 
-all_profits = pd.concat([total_profits_method_1, total_profits_method_2, sum_rl_profits], axis=1)
+all_profits = pd.concat(
+    [total_profits_method_1, total_profits_method_2, sum_rl_profits], axis=1
+)
 all_profits /= 1000
 all_profits = all_profits.round()
 

@@ -16,7 +16,7 @@ if __name__ == "__main__":
 
     k_max = 2  # maximum multiplier for strategic bidding
     time_limit = 3600  # time limit in seconds for each optimization
-    K = 10
+    K = 5
 
     start = pd.to_datetime("2019-03-02 00:00")
     end = pd.to_datetime("2019-03-02 23:00")
@@ -50,7 +50,7 @@ if __name__ == "__main__":
             demand_df=demand_df,
             k_max=k_max,
             opt_gen=opt_gen,
-            big_w=10,
+            big_w=1,
             time_limit=time_limit,
             print_results=print_results,
             K=K,
