@@ -29,7 +29,7 @@ def find_optimal_k_method_1(
     model.c_up = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
     model.c_down = pyo.Var(model.gens, model.time, within=pyo.NonNegativeReals)
     model.k = pyo.Var(model.time, bounds=(1, k_max), within=pyo.NonNegativeReals)
-    model.lambda_ = pyo.Var(model.time, within=pyo.Reals, bounds=(-500, 3000))
+    model.lambda_ = pyo.Var(model.time, within=pyo.Reals, bounds=(-500, 200))
     model.u = pyo.Var(model.gens, model.time, within=pyo.Binary)
 
     # secondary variables
@@ -312,7 +312,7 @@ def find_optimal_k_method_1(
     options = {
         "LogToConsole": print_results,
         "TimeLimit": time_limit,
-        "MIPGap": 0.02,
+        "MIPGap": 0.03,
         # "MIPFocus": 3,
     }
 

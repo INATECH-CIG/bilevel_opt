@@ -9,14 +9,13 @@ from model_2 import find_optimal_k_method_2 as method_2
 from uc_problem import solve_uc_problem
 from utils import calculate_profits
 
-# %%
 if __name__ == "__main__":
     case = "Case_1"
     opt_gen = 1  # generator that is allowed to bid strategically
 
     k_max = 2  # maximum multiplier for strategic bidding
     time_limit = 3600  # time limit in seconds for each optimization
-    K = 5
+    K = 3
 
     start = pd.to_datetime("2019-03-02 00:00")
     end = pd.to_datetime("2019-03-02 23:00")
@@ -41,30 +40,32 @@ if __name__ == "__main__":
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
+    big_w_values = {0: {"model_1":1000, "model_2":100}, 1: {"model_1":1, "model_2":1}, 2: 1000}
+
     # %%
     if optimize:
-        print("Solving using Method 1")
-        main_df_1, supp_df_1, k_values_1 = method_1(
-            gens_df=gens_df,
-            k_values_df=k_values_df,
-            demand_df=demand_df,
-            k_max=k_max,
-            opt_gen=opt_gen,
-            big_w=1,
-            time_limit=time_limit,
-            print_results=print_results,
-            K=K,
-        )
+        # print("Solving using Method 1")
+        # main_df_1, supp_df_1, k_values_1 = method_1(
+        #     gens_df=gens_df,
+        #     k_values_df=k_values_df,
+        #     demand_df=demand_df,
+        #     k_max=k_max,
+        #     opt_gen=opt_gen,
+        #     big_w=big_w_values[opt_gen]["model_1"],
+        #     time_limit=time_limit,
+        #     print_results=print_results,
+        #     K=K,
+        # )
 
-        k_values_df_1 = k_values_df.copy()
-        k_values_df_1[opt_gen] = k_values_1
+        # k_values_df_1 = k_values_df.copy()
+        # k_values_df_1[opt_gen] = k_values_1
 
-        # print("Method 1 results")
-        # print(main_df_1)
-
-        updated_main_df_1, updated_supp_df_1 = solve_uc_problem(
-            gens_df, demand_df, k_values_df_1
-        )
+        # updated_main_df_1, updated_supp_df_1 = solve_uc_problem(
+        #     gens_df, demand_df, k_values_df_1
+        # )
+        # k_values_1.to_csv(f"{save_path}/k_values_1.csv")
+        # updated_main_df_1.to_csv(f"{save_path}/updated_main_df_1.csv")
+        # updated_supp_df_1.to_csv(f"{save_path}/updated_supp_df_1.csv")
 
         print("Solving using Method 2")
         main_df_2, supp_df_2, k_values_2 = method_2(
@@ -73,7 +74,7 @@ if __name__ == "__main__":
             demand_df=demand_df,
             k_max=k_max,
             opt_gen=opt_gen,
-            big_w=10,
+            big_w=big_w_values[opt_gen]["model_2"],
             time_limit=time_limit,
             print_results=print_results,
             K=K,
@@ -82,26 +83,11 @@ if __name__ == "__main__":
         k_values_df_2 = k_values_df.copy()
         k_values_df_2[opt_gen] = k_values_2
 
-        # print("Method 2 results")
-        # print(main_df_2)
-
         updated_main_df_2, updated_supp_df_2 = solve_uc_problem(
             gens_df, demand_df, k_values_df_2
         )
-
-        # merge two k values dataframes
-        k_values = pd.concat([k_values_1, k_values_2], axis=1)
-        k_values.columns = ["Method 1", "Method 2"]
-        # print("Merged k values")
-        # print(k_values)
-
         # save all results to csv
-        k_values_1.to_csv(f"{save_path}/k_values_1.csv")
         k_values_2.to_csv(f"{save_path}/k_values_2.csv")
-
-        updated_main_df_1.to_csv(f"{save_path}/updated_main_df_1.csv")
-        updated_supp_df_1.to_csv(f"{save_path}/updated_supp_df_1.csv")
-
         updated_main_df_2.to_csv(f"{save_path}/updated_main_df_2.csv")
         updated_supp_df_2.to_csv(f"{save_path}/updated_supp_df_2.csv")
 
@@ -164,6 +150,8 @@ if __name__ == "__main__":
         "Method 3 (RL)",
     ]
 
+    profits = profits/1e3
+
     profits = profits.apply(pd.to_numeric, errors="coerce")
     fig = px.bar(
         title=f"Total profits of Unit {opt_gen+1}",
@@ -212,7 +200,7 @@ if __name__ == "__main__":
     # adjust y axis range to fit all bars and text above them
     # fig.update_yaxes(range=[0, 0.7e6])
 
-    fig.update_yaxes(title_text="Profit [€]")
+    fig.update_yaxes(title_text="Profit [tsnd.€]")
     fig.update_layout(showlegend=False)
 
     # save plot as pdf
@@ -309,7 +297,7 @@ if __name__ == "__main__":
     # save plot as html
     # fig.write_html(f"outputs/{case}/mcp_{opt_gen}.html")
     # save plot as pdf
-    fig.write_image(f"outputs/{case}/mcp_{opt_gen}.pdf")
+    # fig.write_image(f"outputs/{case}/mcp_{opt_gen}.pdf")
     fig.show()
 
     # %%
