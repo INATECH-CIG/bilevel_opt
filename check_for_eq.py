@@ -12,14 +12,12 @@ from utils import calculate_profits
 # %%
 if __name__ == "__main__":
     case = "Case_1"
-    method = "method_1"
+    start = pd.to_datetime("2019-03-02 06:00")
+    end = pd.to_datetime("2019-03-02 14:00")
 
-    big_w = 1  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
-    time_limit = 300  # time limit in seconds for each optimization
-
-    start = pd.to_datetime("2019-03-02 00:00")
-    end = pd.to_datetime("2019-03-02 23:00")
+    K = 5
+    time_limit = 1000  # time limit in seconds for each optimization
 
     # gens
     gens_df = pd.read_csv(f"inputs/{case}/gens.csv", index_col=0)
@@ -31,6 +29,8 @@ if __name__ == "__main__":
     # reset index to start at 0
     demand_df = demand_df.reset_index(drop=True)
 
+    # %%
+    # RL Part
     path = f"outputs/{case}/method_1"
 
     market_orders = pd.read_csv(
@@ -48,69 +48,78 @@ if __name__ == "__main__":
 
     main_df_3, supp_df_3 = solve_uc_problem(gens_df, demand_df, k_values_df)
     profits_method_3 = calculate_profits(main_df_3, supp_df_3, gens_df)
-
-    print_results = False
-
-    if method == "method_1":
-        find_optimal_k = method_1
-    elif method == "method_2":
-        find_optimal_k = method_2
-
-    # %%
-    new_k_values = k_values_df.copy()
-    profits_method_1 = pd.DataFrame(
-        index=demand_df.index, columns=gens_df.index, data=0.0
-    )
-
-    print(f"Solving using {method}")
-    for opt_gen in gens_df.index:
-        if opt_gen == 3:
-            continue
-        print(f"Optimizing for Unit {opt_gen+1}")
-        main_df, supp_df, k_values = find_optimal_k(
-            gens_df=gens_df,
-            k_values_df=k_values_df,
-            demand_df=demand_df,
-            k_max=k_max,
-            opt_gen=opt_gen,
-            big_w=big_w,
-            time_limit=time_limit,
-            print_results=print_results,
-            K=3,
-        )
-
-        new_k_values.loc[:, opt_gen] = k_values["k"]
-        temp_k_values = k_values_df.copy()
-        temp_k_values[opt_gen] = k_values["k"]
-
-        main_df, supp_df = solve_uc_problem(gens_df, demand_df, temp_k_values)
-        temp_profits = calculate_profits(main_df, supp_df, gens_df)
-
-        profits_method_1.loc[:, opt_gen] = temp_profits[opt_gen]
-
-    # %%
-    total_profits_method_1 = pd.DataFrame(
-        index=profits_method_1.columns,
-        columns=["after bi-level opt."],
-        data=profits_method_1.sum(),
-    ).astype(float)
-
+    
     total_profits_method_3 = pd.DataFrame(
-        index=total_profits_method_1.index,
+        index=gens_df.index,
         columns=["DRL"],
         data=profits_method_3.sum(),
     ).astype(float)
 
-    all_profits = pd.concat([total_profits_method_3, total_profits_method_1], axis=1)
+    # %%
+    total_profits = pd.DataFrame(
+    index=gens_df.index,
+    columns=["method_1", "method_2"],
+    data=0.0,
+    ).astype(float)
+
+    for method in ["method_1", "method_2"]:
+        new_k_values = k_values_df.copy()
+        profits = pd.DataFrame(
+            index=demand_df.index, columns=gens_df.index, data=0.0
+        )
+        if method == "method_1":
+            find_optimal_k = method_1
+            big_w = 100  # weight for duality gap objective
+
+        elif method == "method_2":
+            find_optimal_k = method_2
+            big_w = 1  # weight for duality gap objective
+
+        print(f"Solving using {method}")
+        for opt_gen in gens_df.index:
+            if opt_gen == 3:
+                continue
+            print(f"Optimizing for Unit {opt_gen+1}")
+            main_df, supp_df, k_values = find_optimal_k(
+                gens_df=gens_df,
+                k_values_df=k_values_df,
+                demand_df=demand_df,
+                k_max=k_max,
+                opt_gen=opt_gen,
+                big_w=big_w,
+                time_limit=time_limit,
+                print_results=False,
+                K=K,
+            )
+
+            new_k_values.loc[:, opt_gen] = k_values["k"]
+            temp_k_values = k_values_df.copy()
+            temp_k_values[opt_gen] = k_values["k"]
+
+            main_df, supp_df = solve_uc_problem(gens_df, demand_df, temp_k_values)
+            temp_profits = calculate_profits(main_df, supp_df, gens_df)
+
+            profits.loc[:, opt_gen] = temp_profits[opt_gen]
+
+            total_profits[method] = profits.sum()
+
+    # %%
+    all_profits = pd.concat([total_profits, total_profits_method_3], axis=1)
     all_profits /= 1000
     all_profits = all_profits.round()
 
     # drop index 3
     all_profits = all_profits.drop(3)
+
+    #rename index to i+1
+    all_profits.index = all_profits.index + 1
+
+    all_profits = all_profits.astype(float)
+
     # plot the profits as bars
     fig = px.bar(
         all_profits,
-        x=all_profits.index + 1,
+        x=all_profits.index,
         y=all_profits.columns,
         title="Total profit per unit",
         labels={"index": "Unit", "Profit": "Profit [k€]"},
@@ -123,17 +132,11 @@ if __name__ == "__main__":
     # save figure as html
     # fig.write_html("outputs/total_profits.html")
     # and as pdf
-    # fig.write_image("outputs/total_profits.pdf")
+    fig.write_image("outputs/total_profits_eq_check.pdf")
 
     fig.show()
 
     # %%
-    # compare k_values_df and k_values_new for opt_gen
-    # print("Previous k_values")
-    # print(k_values_df)
-    # print("\nNew k_values")
-    # print(new_k_values)
-
     # plot both k_values_df for each unit
     fig = px.line(
         k_values_df,

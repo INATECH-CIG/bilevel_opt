@@ -130,7 +130,7 @@ def save_results(save_results_path, main_df, supp_df, k_values_df):
 if __name__ == "__main__":
     case = "Case_1"
 
-    big_w = 10  # weight for duality gap objective
+    big_w = 100  # weight for duality gap objective
     k_max = 2  # maximum multiplier for strategic bidding
     time_limit = 1000  # time limit in seconds for each optimization
     K = 3
@@ -141,7 +141,7 @@ if __name__ == "__main__":
     print_results = False
     solve_diag = True
 
-    method = "method_2"
+    method = "method_1"
 
     if solve_diag:
         run_diagonalization(

@@ -12,14 +12,14 @@ from utils import calculate_profits
 # %%
 if __name__ == "__main__":
     case = "Case_1"
-    opt_gen = 2  # generator that is allowed to bid strategically
+    opt_gen = 1  # generator that is allowed to bid strategically
 
     k_max = 2  # maximum multiplier for strategic bidding
     time_limit = 3600  # time limit in seconds for each optimization
     K = 10
 
-    start = pd.to_datetime("2019-03-02 06:00")
-    end = pd.to_datetime("2019-03-02 14:00")
+    start = pd.to_datetime("2019-03-02 00:00")
+    end = pd.to_datetime("2019-03-02 23:00")
 
     # gens
     gens_df = pd.read_csv(f"inputs/{case}/gens.csv", index_col=0)
@@ -33,8 +33,8 @@ if __name__ == "__main__":
 
     k_values_df = pd.DataFrame(columns=gens_df.index, index=demand_df.index, data=1.0)
 
-    print_results = False
-    optimize = False
+    print_results = True
+    optimize = True
 
     save_path = f"outputs/{case}/gen_{opt_gen}"
     # check if path exists
@@ -50,7 +50,7 @@ if __name__ == "__main__":
             demand_df=demand_df,
             k_max=k_max,
             opt_gen=opt_gen,
-            big_w=100,
+            big_w=10,
             time_limit=time_limit,
             print_results=print_results,
             K=K,
@@ -313,86 +313,6 @@ if __name__ == "__main__":
     fig.show()
 
     # %%
-    # plot demand_df
-    fig = px.line(
-        demand_df["volume"],
-        title="Demand",
-        labels={"Time": "Time", "value": "Demand [MW]"},
-    )
-    # rename the line into Demand [MWh]
-    fig.data[0].name = "Demand [MW]"
-
-    # add capacity of each unit as horizontal line
-    # accumulate the capacity
-    # and name the horizontal line after the unit
-    capacity = 0
-    for i in range(len(gens_df)):
-        capacity += gens_df.at[i, "g_max"]
-        fig.add_hline(y=capacity, line_dash="dash", annotation_text=f"Unit {i+1}")
-
-    # y axis from 0 to 3500
-    fig.update_yaxes(range=[0, 4000])
-    fig.update_yaxes(title_text="Demand [MW]")
-    # rename x axis to Time step
-    fig.update_xaxes(title_text="Time step")
-    fig.update_layout(showlegend=False)
-    # save plot as html
-    # fig.write_html(f"outputs/{case}/demand.html")
-    # save plot as pdf
-    # fig.write_image(f"outputs/{case}/demand.pdf")
-    fig.show()
-
-    # %%
-    # plot marginal costs of each unit as bar plot and name it marginal cost
-    # Reshape the DataFrame to have separate rows for each unit's marginal cost and its multiplied value
-
-    # Reshape the DataFrame to have separate rows for each unit's marginal cost and its multiplied value
-    df = pd.DataFrame(
-        {
-            "Unit": gens_df.index,
-            "Marginal cost": gens_df["mc"],
-            "Bidding interval": gens_df["mc"],
-            "Total interval": 2 * gens_df["mc"],
-        }
-    )
-    df.at[3, "Bidding interval"] = 0
-    # Create the figure object
-    fig = px.bar(
-        df,
-        x="Unit",
-        y=["Marginal cost", "Bidding interval"],
-        title="Marginal costs",
-        labels={"x": "Unit", "y": "Marginal cost [€/MWh]"},
-    )
-
-    # rename y axis to Marginal cost [€/MWh]
-    fig.update_yaxes(title_text="Marginal cost [€/MWh]")
-
-    # Set the opacity of the second set of bars to make them semitransparent
-    fig.update_traces(opacity=0.6, selector=dict(name="Bidding interval"))
-
-    # display the values from df["Total interval"] on top of the red bar
-    fig.update_traces(text=df["Total interval"], selector=dict(name="Bidding interval"))
-
-    # display the values from df["Marginal cost"] on top of the blue bar
-    fig.update_traces(text=df["Marginal cost"], selector=dict(name="Marginal cost"))
-
-    # display the legend below the plot
-    fig.update_layout(
-        legend=dict(orientation="h", yanchor="bottom", y=1.0, xanchor="right", x=1)
-    )
-
-    # y axis form 0 to 200
-    fig.update_yaxes(range=[0, 200])
-
-    # save plot as html
-    # fig.write_html(f"outputs/{case}/marginal_costs.html")
-    # save plot as pdf
-    fig.write_image(f"outputs/{case}/marginal_costs.pdf")
-
-    fig.show()
-
-    # %%
     # plot mcp and mcp_hat from main_df_2
     fig = px.line(
         main_df_2[["mcp", "mcp_hat"]],
@@ -412,7 +332,7 @@ if __name__ == "__main__":
     )
     fig.update_xaxes(title_text="Time step")
     # save plot as html
-    fig.write_html(f"outputs/{case}/mcp.html")
+    # fig.write_html(f"outputs/{case}/mcp.html")
     # save plot as pdf
     fig.write_image(f"outputs/{case}/mcp.pdf")
     fig.show()
