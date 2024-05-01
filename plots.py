@@ -8,8 +8,8 @@ import plotly.express as px
 
 case = "Case_1"
 
-start = pd.to_datetime("2019-03-02 00:00")
-end = pd.to_datetime("2019-03-02 23:00")
+start = pd.to_datetime("2019-03-02 06:00")
+end = pd.to_datetime("2019-03-02 14:00")
 
 # gens
 gens_df = pd.read_csv(f"inputs/{case}/gens.csv", index_col=0)
@@ -21,9 +21,10 @@ demand_df = demand_df.loc[start:end]
 # reset index to start at 0
 demand_df = demand_df.reset_index(drop=True)
 
+# demand_df["volume"] = demand_df["volume"] * 0.7
+
 font_size = 22
-# %%
-# plot demand_df
+# %% plot demand_df
 # Create a line plot for demand data
 fig = px.line(
     demand_df,
@@ -66,8 +67,7 @@ fig.write_image(f"outputs/{case}/demand.pdf")
 # Optionally display the figure
 fig.show()
 
-# %%
-# plot marginal costs of each unit as bar plot and name it marginal cost
+# %% plot marginal costs of each unit as bar plot and name it marginal cost
 # Reshape the DataFrame to have separate rows for each unit's marginal cost and its multiplied value
 
 df = pd.DataFrame(
@@ -127,12 +127,21 @@ fig.write_image(f"outputs/{case}/marginal_costs.pdf")
 fig.show()
 
 # %%
-for opt_gen in range(3):
+# Define the cases, units, and other parameters
+case = "Case_1"
+opt_gens = [0, 1, 2]  # Assuming each case corresponds to a different generator
+price_column = "mcp"
+save_path = "outputs"
+
+k_values_df = pd.DataFrame(columns=gens_df.index, index=demand_df.index, data=1.0)
+
+# Initialize a DataFrame to store all profits
+all_profits = pd.DataFrame(columns=["Method 1", "Method 2 (with KKTs)", "Method 3 (DRL)"], index=opt_gens, data=0.0)
+
+# Loop through each case and generator
+for opt_gen in opt_gens:
     # load data
     path = f"outputs/{case}/gen_{opt_gen}"
-    save_path = f"outputs/{case}/gen_{opt_gen}"
-
-    k_values_df = pd.DataFrame(columns=gens_df.index, index=demand_df.index, data=1.0)
 
     k_values_1 = pd.read_csv(f"{path}/k_values_1.csv", index_col=0)
     k_values_2 = pd.read_csv(f"{path}/k_values_2.csv", index_col=0)
@@ -168,82 +177,82 @@ for opt_gen in range(3):
 
     profits_method_3 = calculate_profits(main_df_3, supp_df_3, gens_df)
 
-    main_df_3.to_csv(f"{save_path}/updated_main_df_3.csv")
-    supp_df_3.to_csv(f"{save_path}/updated_supp_df_3.csv")
+    profits = pd.concat(
+        [
+            updated_profits_method_1[opt_gen],
+            updated_profits_method_2[opt_gen],
+            profits_method_3[opt_gen],
+        ],
+        axis=1,
+    )
+    profits.columns = [
+        "Method 1",
+        "Method 2 (with KKTs)",
+        "Method 3 (DRL)",
+    ]
+
+    profits = profits.apply(pd.to_numeric, errors="coerce")
+
+    all_profits.loc[opt_gen] = profits.sum()
+
+#rename index in all_profits to Unit 1, Unit 2, Unit 3
+all_profits.index = [f"Unit {i+1}" for i in all_profits.index]
+# rename index to Unit
+all_profits.index.name = "Unit"
+
+all_profits = all_profits / 1e3
+# also round to 0 decimal places
+all_profits = all_profits.round(0)
+
+# Assuming df is your DataFrame
+all_profits.reset_index(inplace=True)  # Reset the index to make 'Unit' a regular column
+
+# Melting the DataFrame
+df_long = all_profits.melt(id_vars="Unit", var_name="Method", value_name="Profit")
 
 # %%
-# plot sum of both profits as bar chart
-profits = pd.concat(
-    [
-        updated_profits_method_1[opt_gen],
-        updated_profits_method_2[opt_gen],
-        profits_method_3[opt_gen],
-    ],
-    axis=1,
-)
-profits.columns = [
-    "Method 1 (after UC)",
-    "Method 2 (after UC)",
-    "Method 3 (RL)",
-]
+import plotly.express as px
 
-# %%
-profits = profits/1e3
-
-profits = profits.apply(pd.to_numeric, errors="coerce")
+# Assuming df_long is already prepared
+# Create the bar plot
 fig = px.bar(
-    title=f"Total profits of Unit {opt_gen+1}",
-    labels={"index": "Method", "Profit": "Profit [€]"},
+    df_long,
+    x="Unit",
+    y="Profit",
+    color="Method",  # This ensures different colors for each method
+    barmode='group',
+    labels={"Profit": "Profit [tsnd. €]"},  # Note: Label here is slightly different
 )
 
-# add Method 1 (after UC) bar
-fig.add_bar(
-    x=["Method 1"],
-    y=[profits["Method 1 (after UC)"].sum()],
-    name="Method 1",
+# Update layout details
+fig.update_layout(
+    xaxis_title="Unit",
+    yaxis_title="Profit [tsnd. €]",
+    legend_title="Methods",
+    legend=dict(
+        title="Method",
+        orientation="v",
+        yanchor="top",
+        y=0.95,  # Adjust this value to move the legend up or down
+        xanchor="right",
+        x=1  # Adjust this value to move the legend left or right
+    ),
+    margin=dict(l=20, r=20, t=20, b=20),
+    font=dict(family="Arial", size=font_size, color="black"),
+    template="plotly_white"
 )
 
-# add Method 2 (after UC) bar
-fig.add_bar(
-    x=["Method 2 (with KKTs)"],
-    y=[profits["Method 2 (after UC)"].sum()],
-    name="Method 2",
-)
-
-# add Method 3 (RL) bar
-fig.add_bar(
-    x=["Method 3 (RL)"],
-    y=[profits["Method 3 (RL)"].sum()],
-    name="Method 3 (RL)",
-)
-
-# make all bares with Method 1 in name blue
-for i in range(len(fig.data)):
-    if "Method 1" in fig.data[i].name:
-        fig.data[i].marker.color = "blue"
-
-# make all bares with Method 2 in name orange
-for i in range(len(fig.data)):
-    if "Method 2" in fig.data[i].name:
-        fig.data[i].marker.color = "orange"
-
-# make all bares with Method 3 in name green
-for i in range(len(fig.data)):
-    if "Method 3" in fig.data[i].name:
-        fig.data[i].marker.color = "green"
-
-# display values on top of bars
+# Display integer values on top of bars
 fig.update_traces(texttemplate="%{y:.0f}", textposition="outside")
 
-# adjust y axis range to fit all bars and text above them
-# fig.update_yaxes(range=[0, 0.7e6])
+# Set y-axis range and title
+fig.update_yaxes(range=[0, 550])
 
-fig.update_yaxes(title_text="Profit [mln.€]")
-fig.update_layout(showlegend=False)
+# Save plot as PDF
+fig.write_image(f"outputs/{case}/all_profits.pdf")
 
-# save plot as pdf
-fig.write_image(f"outputs/{case}/profits_{opt_gen}.pdf")
-
-# save plot as html
-# fig.write_html(f"outputs/{case}/profits_{opt_gen}.html")
+# Show the plot
 fig.show()
+
+
+# %%

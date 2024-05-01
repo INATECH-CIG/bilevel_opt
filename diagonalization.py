@@ -24,7 +24,7 @@ def run_diagonalization(
     k_max=2,
     K=3,
     time_limit=180,
-    big_w=10,
+    big_w_values=10,
     print_results=False,
 ):
     if method == "method_1":
@@ -67,7 +67,7 @@ def run_diagonalization(
                     demand_df=demand_df,
                     k_max=k_max,
                     opt_gen=opt_gen,
-                    big_w=big_w,
+                    big_w=big_w_values[opt_gen][method],
                     time_limit=time_limit,
                     print_results=print_results,
                     K=K,
@@ -92,11 +92,11 @@ def run_diagonalization(
             print(f"Actions did not change. Convergence reached at iteration {i}")
             break
 
-        if (abs(diff_in_profit) < 3000).all():
-            print(f"Profits did not change. Convergence reached at iteration {i}")
-            break
+        # if (abs(diff_in_profit) < 3000).all():
+        #     print(f"Profits did not change. Convergence reached at iteration {i}")
+        #     break
 
-        if (abs(diff_in_profit) <= 0.01 * profit_values.sum(axis=0)).all():
+        if (abs(diff_in_profit) <= 0.03 * profit_values.sum(axis=0)).all():
             print(
                 f"Profits change is below threshold. Convergence reached at iteration {i}"
             )
@@ -133,10 +133,13 @@ def save_results(save_results_path, main_df, supp_df, k_values_df):
 if __name__ == "__main__":
     case = "Case_1"
 
-    big_w = 100  # weight for duality gap objective
+    big_w_values = {0: {"method_1":1000, "method_2":100}, 
+                    1: {"method_1":10, "method_2":1}, 
+                    2: {"method_1":1000, "method_2":100}}
+
     k_max = 2  # maximum multiplier for strategic bidding
     time_limit = 1000  # time limit in seconds for each optimization
-    K = 3
+    K = 10
 
     start = pd.to_datetime("2019-03-02 06:00")
     end = pd.to_datetime("2019-03-02 14:00")
@@ -144,7 +147,7 @@ if __name__ == "__main__":
     print_results = False
     solve_diag = True
 
-    method = "method_1"
+    method = "method_2"
 
     if solve_diag:
         run_diagonalization(
@@ -154,7 +157,7 @@ if __name__ == "__main__":
             method=method,
             k_max=k_max,
             time_limit=time_limit,
-            big_w=big_w,
+            big_w_values=big_w_values,
             print_results=print_results,
             K=K,
         )

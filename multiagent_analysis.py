@@ -5,7 +5,6 @@ import plotly.express as px
 from uc_problem import solve_uc_problem
 from utils import calculate_profits
 
-# %%
 case = "Case_1"
 start = pd.to_datetime("2019-03-02 06:00")
 end = pd.to_datetime("2019-03-02 14:00")

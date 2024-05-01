@@ -516,7 +516,7 @@ def find_optimal_k_method_2(
         "LogToConsole": print_results,
         "TimeLimit": time_limit,
         "MIPGap": 0.03,
-        # "MIPFocus": 2,
+        # "MIPFocus": 3,
     }
 
     results = solver.solve(instance, options=options, tee=print_results)

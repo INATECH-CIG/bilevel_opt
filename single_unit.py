@@ -11,14 +11,14 @@ from utils import calculate_profits
 
 if __name__ == "__main__":
     case = "Case_1"
-    opt_gen = 1  # generator that is allowed to bid strategically
+    opt_gen = 2  # generator that is allowed to bid strategically
 
     k_max = 2  # maximum multiplier for strategic bidding
     time_limit = 3600  # time limit in seconds for each optimization
-    K = 3
+    K = 10
 
-    start = pd.to_datetime("2019-03-02 00:00")
-    end = pd.to_datetime("2019-03-02 23:00")
+    start = pd.to_datetime("2019-03-02 06:00")
+    end = pd.to_datetime("2019-03-02 14:00")
 
     # gens
     gens_df = pd.read_csv(f"inputs/{case}/gens.csv", index_col=0)
@@ -40,32 +40,34 @@ if __name__ == "__main__":
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
-    big_w_values = {0: {"model_1":1000, "model_2":100}, 1: {"model_1":1, "model_2":1}, 2: 1000}
+    big_w_values = {0: {"model_1":1000, "model_2":100}, 
+                    1: {"model_1":10, "model_2":1}, 
+                    2: {"model_1":1000, "model_2":100}}
 
     # %%
     if optimize:
-        # print("Solving using Method 1")
-        # main_df_1, supp_df_1, k_values_1 = method_1(
-        #     gens_df=gens_df,
-        #     k_values_df=k_values_df,
-        #     demand_df=demand_df,
-        #     k_max=k_max,
-        #     opt_gen=opt_gen,
-        #     big_w=big_w_values[opt_gen]["model_1"],
-        #     time_limit=time_limit,
-        #     print_results=print_results,
-        #     K=K,
-        # )
+        print("Solving using Method 1")
+        main_df_1, supp_df_1, k_values_1 = method_1(
+            gens_df=gens_df,
+            k_values_df=k_values_df,
+            demand_df=demand_df,
+            k_max=k_max,
+            opt_gen=opt_gen,
+            big_w=big_w_values[opt_gen]["model_1"],
+            time_limit=time_limit,
+            print_results=print_results,
+            K=K,
+        )
 
-        # k_values_df_1 = k_values_df.copy()
-        # k_values_df_1[opt_gen] = k_values_1
+        k_values_df_1 = k_values_df.copy()
+        k_values_df_1[opt_gen] = k_values_1
 
-        # updated_main_df_1, updated_supp_df_1 = solve_uc_problem(
-        #     gens_df, demand_df, k_values_df_1
-        # )
-        # k_values_1.to_csv(f"{save_path}/k_values_1.csv")
-        # updated_main_df_1.to_csv(f"{save_path}/updated_main_df_1.csv")
-        # updated_supp_df_1.to_csv(f"{save_path}/updated_supp_df_1.csv")
+        updated_main_df_1, updated_supp_df_1 = solve_uc_problem(
+            gens_df, demand_df, k_values_df_1
+        )
+        k_values_1.to_csv(f"{save_path}/k_values_1.csv")
+        updated_main_df_1.to_csv(f"{save_path}/updated_main_df_1.csv")
+        updated_supp_df_1.to_csv(f"{save_path}/updated_supp_df_1.csv")
 
         print("Solving using Method 2")
         main_df_2, supp_df_2, k_values_2 = method_2(
@@ -147,14 +149,13 @@ if __name__ == "__main__":
     profits.columns = [
         "Method 1 (after UC)",
         "Method 2 (after UC)",
-        "Method 3 (RL)",
+        "Method 3 (DRL)",
     ]
 
     profits = profits/1e3
 
     profits = profits.apply(pd.to_numeric, errors="coerce")
     fig = px.bar(
-        title=f"Total profits of Unit {opt_gen+1}",
         labels={"index": "Method", "Profit": "Profit [€]"},
     )
 
@@ -175,8 +176,8 @@ if __name__ == "__main__":
     # add Method 3 (RL) bar
     fig.add_bar(
         x=["Method 3 (RL)"],
-        y=[profits["Method 3 (RL)"].sum()],
-        name="Method 3 (RL)",
+        y=[profits["Method 3 (DRL)"].sum()],
+        name="Method 3 (DRL)",
     )
 
     # make all bares with Method 1 in name blue
