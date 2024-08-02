@@ -63,7 +63,7 @@ fig.update_layout(
 
 # Save plot as PDF
 fig.write_image(f"outputs/{case}/demand.pdf")
-# 
+#
 # Optionally display the figure
 fig.show()
 
@@ -72,19 +72,22 @@ fig.show()
 
 df = pd.DataFrame(
     {
-        "Unit": gens_df.index[:3] + 1,
-        "Marginal cost": gens_df["mc"][:3],
-        "Bidding interval": gens_df["mc"][:3],
-        "Total interval": 2 * gens_df["mc"][:3],
+        "Unit": gens_df.index[:4] + 1,
+        "Marginal cost": gens_df["mc"][:4],
+        "Bidding interval": gens_df["mc"][:4],
+        "Total interval": 2 * gens_df["mc"][:4],
     }
 )
+
+df.at[3, "Bidding interval"] = -1
+df.at[3, "Total interval"] = -1
 
 # Create the figure object
 fig = px.bar(
     df,
     x="Unit",
     y=["Marginal cost", "Bidding interval"],
-    labels={"x": "Unit", "y": "Marginal cost [€/MWh]"},
+    labels={"x": "Unit", "y": "Price [€/MWh]"},
 )
 
 # Update the opacity for the bidding interval bars to make them semi-transparent
@@ -115,7 +118,7 @@ fig.update_layout(
 )
 
 # Set y-axis range and title
-fig.update_yaxes(range=[0, 200], title_text="Marginal cost [€/MWh]")
+fig.update_yaxes(range=[0, 200], title_text="Price [€/MWh]")
 
 # Set x-axis to only show integer labels
 fig.update_xaxes(tickvals=df["Unit"])
@@ -134,9 +137,13 @@ price_column = "mcp"
 save_path = "outputs"
 
 k_values_df = pd.DataFrame(columns=gens_df.index, index=demand_df.index, data=1.0)
-
+columns = [
+    "Method 1 (aligned with [34] as in Fig.1a)",
+    "Method 2 (proposed model as in Fig.1b)",
+    "Method 3 (DRL)",
+]
 # Initialize a DataFrame to store all profits
-all_profits = pd.DataFrame(columns=["Method 1", "Method 2 (with KKTs)", "Method 3 (DRL)"], index=opt_gens, data=0.0)
+all_profits = pd.DataFrame(columns=columns, index=opt_gens, data=0.0)
 
 # Loop through each case and generator
 for opt_gen in opt_gens:
@@ -185,18 +192,14 @@ for opt_gen in opt_gens:
         ],
         axis=1,
     )
-    profits.columns = [
-        "Method 1",
-        "Method 2 (with KKTs)",
-        "Method 3 (DRL)",
-    ]
+    profits.columns = columns
 
     profits = profits.apply(pd.to_numeric, errors="coerce")
 
     all_profits.loc[opt_gen] = profits.sum()
 
-#rename index in all_profits to Unit 1, Unit 2, Unit 3
-all_profits.index = [f"Unit {i+1}" for i in all_profits.index]
+# rename index in all_profits to Unit 1, Unit 2, Unit 3
+# all_profits.index = [f"Unit {i+1}" for i in all_profits.index]
 # rename index to Unit
 all_profits.index.name = "Unit"
 
@@ -206,6 +209,8 @@ all_profits = all_profits.round(0)
 
 # Assuming df is your DataFrame
 all_profits.reset_index(inplace=True)  # Reset the index to make 'Unit' a regular column
+
+all_profits["Unit"] = all_profits["Unit"].apply(lambda x: f"{x + 1}")
 
 # Melting the DataFrame
 df_long = all_profits.melt(id_vars="Unit", var_name="Method", value_name="Profit")
@@ -220,14 +225,14 @@ fig = px.bar(
     x="Unit",
     y="Profit",
     color="Method",  # This ensures different colors for each method
-    barmode='group',
+    barmode="group",
     labels={"Profit": "Profit [tsnd. €]"},  # Note: Label here is slightly different
 )
 
 # Update layout details
 fig.update_layout(
     xaxis_title="Unit",
-    yaxis_title="Profit [tsnd. €]",
+    yaxis_title="Profit [k.€]",
     legend_title="Methods",
     legend=dict(
         title="Method",
@@ -235,11 +240,11 @@ fig.update_layout(
         yanchor="top",
         y=0.95,  # Adjust this value to move the legend up or down
         xanchor="right",
-        x=1  # Adjust this value to move the legend left or right
+        x=1,  # Adjust this value to move the legend left or right
     ),
     margin=dict(l=20, r=20, t=20, b=20),
     font=dict(family="Arial", size=font_size, color="black"),
-    template="plotly_white"
+    template="plotly_white",
 )
 
 # Display integer values on top of bars
@@ -247,6 +252,9 @@ fig.update_traces(texttemplate="%{y:.0f}", textposition="outside")
 
 # Set y-axis range and title
 fig.update_yaxes(range=[0, 550])
+
+# set legend font size to 14
+fig.update_layout(legend=dict(title_font_size=20, font=dict(size=20)))
 
 # Save plot as PDF
 fig.write_image(f"outputs/{case}/all_profits.pdf")

@@ -1,8 +1,7 @@
 # %%
-import os
-
 import pandas as pd
 import plotly.express as px
+import numpy as np
 
 from model_1 import find_optimal_k_method_1 as method_1
 from model_2 import find_optimal_k_method_2 as method_2
@@ -16,8 +15,8 @@ if __name__ == "__main__":
     end = pd.to_datetime("2019-03-02 14:00")
 
     k_max = 2  # maximum multiplier for strategic bidding
-    K = 5
-    time_limit = 1000  # time limit in seconds for each optimization
+    K = 10
+    time_limit = 300  # time limit in seconds for each optimization
 
     # gens
     gens_df = pd.read_csv(f"inputs/{case}/gens.csv", index_col=0)
@@ -62,16 +61,20 @@ if __name__ == "__main__":
         data=0.0,
     ).astype(float)
 
+    big_w_values = {
+        0: {"method_1": 1000, "method_2": 100},
+        1: {"method_1": 10, "method_2": 1},
+        2: {"method_1": 1000, "method_2": 100},
+    }
+
     for method in ["method_1", "method_2"]:
         new_k_values = k_values_df.copy()
         profits = pd.DataFrame(index=demand_df.index, columns=gens_df.index, data=0.0)
         if method == "method_1":
             find_optimal_k = method_1
-            big_w = 100  # weight for duality gap objective
 
         elif method == "method_2":
             find_optimal_k = method_2
-            big_w = 1  # weight for duality gap objective
 
         print(f"Solving using {method}")
         for opt_gen in gens_df.index:
@@ -84,20 +87,20 @@ if __name__ == "__main__":
                 demand_df=demand_df,
                 k_max=k_max,
                 opt_gen=opt_gen,
-                big_w=big_w,
+                big_w=big_w_values[opt_gen][method],
                 time_limit=time_limit,
                 print_results=False,
                 K=K,
             )
 
-            new_k_values.loc[:, opt_gen] = k_values["k"]
+            new_k_values.loc[:, opt_gen] = k_values["k"].values.astype(np.float64)
             temp_k_values = k_values_df.copy()
             temp_k_values[opt_gen] = k_values["k"]
 
             main_df, supp_df = solve_uc_problem(gens_df, demand_df, temp_k_values)
             temp_profits = calculate_profits(main_df, supp_df, gens_df)
 
-            profits.loc[:, opt_gen] = temp_profits[opt_gen]
+            profits.loc[:, opt_gen] = temp_profits[opt_gen].values.astype(np.float64)
 
             total_profits[method] = profits.sum()
 
@@ -114,21 +117,36 @@ if __name__ == "__main__":
 
     all_profits = all_profits.astype(float)
 
+    # %%
     # plot the profits as bars
     fig = px.bar(
         all_profits,
         x=all_profits.index,
         y=all_profits.columns,
-        title="Total profit per unit",
         labels={"index": "Unit", "Profit": "Profit [k€]"},
         barmode="group",
     )
 
     # display values on top
     fig.update_traces(texttemplate="%{y:.0f}", textposition="outside")
-    fig.update_yaxes(title_text="Profit [k€]")
-    # save figure as html
-    # fig.write_html("outputs/total_profits.html")
+    fig.update_yaxes(title_text="Profit [tsnd. €]", range=[0, 1000])
+    # Update layout details
+    fig.update_layout(
+        xaxis_title="Unit",
+        yaxis_title="Profit [tsnd. €]",
+        legend_title="Methods",
+        legend=dict(
+            title="Method",
+            orientation="v",
+            yanchor="top",
+            y=0.95,  # Adjust this value to move the legend up or down
+            xanchor="right",
+            x=1,  # Adjust this value to move the legend left or right
+        ),
+        margin=dict(l=20, r=20, t=20, b=20),
+        font=dict(family="Arial", size=22, color="black"),
+        template="plotly_white",
+    )
     # and as pdf
     fig.write_image("outputs/total_profits_eq_check.pdf")
 

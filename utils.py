@@ -167,3 +167,14 @@ def calculate_rl_profit(gens_df, demand_df, market_orders, start, end):
                 rl_profits[opt_gen][t] -= gens_df.at[opt_gen, "k_up"]
 
     return rl_profits
+
+
+def calculate_mc(powerplant, fuel_prices):
+    fuel = powerplant["fuel"]
+    fuel_cost = fuel_prices[fuel].iloc[0] / powerplant["efficiency"]
+    co2_cost = fuel_prices["co2"].iloc[0] * powerplant["ef"] / powerplant["efficiency"]
+    variable_cost = powerplant["variable_cost"]
+
+    mc = fuel_cost + co2_cost + variable_cost
+
+    return mc

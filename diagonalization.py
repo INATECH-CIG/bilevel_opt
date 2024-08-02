@@ -133,13 +133,15 @@ def save_results(save_results_path, main_df, supp_df, k_values_df):
 if __name__ == "__main__":
     case = "Case_1"
 
-    big_w_values = {0: {"method_1":1000, "method_2":100}, 
-                    1: {"method_1":10, "method_2":1}, 
-                    2: {"method_1":1000, "method_2":100}}
+    big_w_values = {
+        0: {"method_1": 1000, "method_2": 100},
+        1: {"method_1": 10, "method_2": 1},
+        2: {"method_1": 1000, "method_2": 100},
+    }
 
     k_max = 2  # maximum multiplier for strategic bidding
     time_limit = 1000  # time limit in seconds for each optimization
-    K = 10
+    K = 5
 
     start = pd.to_datetime("2019-03-02 06:00")
     end = pd.to_datetime("2019-03-02 14:00")

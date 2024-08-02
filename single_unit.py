@@ -7,28 +7,63 @@ import plotly.express as px
 from model_1 import find_optimal_k_method_1 as method_1
 from model_2 import find_optimal_k_method_2 as method_2
 from uc_problem import solve_uc_problem
-from utils import calculate_profits
+from utils import calculate_profits, calculate_mc
 
 if __name__ == "__main__":
-    case = "Case_1"
-    opt_gen = 2  # generator that is allowed to bid strategically
+    case = "Case_2"
+    opt_gen = 42  # generator that is allowed to bid strategically
 
     k_max = 2  # maximum multiplier for strategic bidding
-    time_limit = 3600  # time limit in seconds for each optimization
+    time_limit = 600 * 10  # time limit in seconds for each optimization
     K = 10
 
-    start = pd.to_datetime("2019-03-02 06:00")
-    end = pd.to_datetime("2019-03-02 14:00")
+    start = pd.to_datetime("2021-03-02 00:00")
+    end = pd.to_datetime("2021-03-02 12:00")
 
     # gens
-    gens_df = pd.read_csv(f"inputs/{case}/gens.csv", index_col=0)
+    gens_df = pd.read_csv(f"inputs/{case}/gens.csv")
+    emission_factors = pd.read_csv(f"inputs/{case}/EmissionFactors.csv", index_col=0)
+    gens_df["ef"] = gens_df["fuel"].map(emission_factors["emissions"])
+
+    fuel_prices = pd.read_csv(f"inputs/{case}/fuel_prices.csv", index_col=0)
+
+    gens_df["mc"] = gens_df.apply(calculate_mc, axis=1, fuel_prices=fuel_prices).round(
+        2
+    )
+
+    gens_df["k_up"] *= (gens_df["g_max"] * 2 / 3 / 10).round(2)
+    gens_df["k_down"] *= (gens_df["g_max"] * 1 / 3 / 10).round(2)
 
     # 24 hours of demand first increasing and then decreasing
     demand_df = pd.read_csv(f"inputs/{case}/demand.csv", index_col=0)
     demand_df.index = pd.to_datetime(demand_df.index)
+    demand_df["price"] = 500
+    # resaple to 1 hour
+    demand_df = demand_df.resample("1h").mean()
     demand_df = demand_df.loc[start:end]
+
+    vre_gen = pd.read_csv(f"inputs/{case}/vre_gen.csv", index_col=0)
+    vre_gen.index = pd.to_datetime(vre_gen.index)
+    # resaple to 1 hour
+    vre_gen = vre_gen.resample("1h").mean()
+    vre_gen = vre_gen.loc[start:end]
+
+    # subtract vre generation from demand
+    demand_df["volume"] -= vre_gen.sum(axis=1)
+
     # reset index to start at 0
     demand_df = demand_df.reset_index(drop=True)
+
+    # active power plant
+    active_pp = gens_df["g_max"].cumsum() <= demand_df["volume"].iloc[0]
+
+    # set g_0 as g_max for the first 60 power plants
+    gens_df["g_0"] = 0
+    gens_df.loc[active_pp, "g_0"] = gens_df.loc[active_pp, "g_max"]
+
+    # set u_0 as 1 for the first 60 power plants
+    gens_df["u_0"] = 0
+    gens_df.loc[active_pp, "u_0"] = 1
 
     k_values_df = pd.DataFrame(columns=gens_df.index, index=demand_df.index, data=1.0)
 
@@ -40,9 +75,13 @@ if __name__ == "__main__":
     if not os.path.exists(save_path):
         os.makedirs(save_path)
 
-    big_w_values = {0: {"model_1":1000, "model_2":100}, 
-                    1: {"model_1":10, "model_2":1}, 
-                    2: {"model_1":1000, "model_2":100}}
+    big_w_values = {
+        0: {"model_1": 1000, "model_2": 100},
+        42: {"model_1": 1000, "model_2": 1000},
+        25: {"model_1": 1000, "model_2": 1000},
+    }
+
+    # big_w_values = 1000
 
     # %%
     if optimize:
@@ -69,6 +108,8 @@ if __name__ == "__main__":
         updated_main_df_1.to_csv(f"{save_path}/updated_main_df_1.csv")
         updated_supp_df_1.to_csv(f"{save_path}/updated_supp_df_1.csv")
 
+    # %%
+    if optimize:
         print("Solving using Method 2")
         main_df_2, supp_df_2, k_values_2 = method_2(
             gens_df=gens_df,
@@ -100,17 +141,17 @@ if __name__ == "__main__":
     path = f"outputs/{case}/gen_{opt_gen}"
 
     k_values_1 = pd.read_csv(f"{path}/k_values_1.csv", index_col=0)
-    k_values_2 = pd.read_csv(f"{path}/k_values_2.csv", index_col=0)
 
     updated_main_df_1 = pd.read_csv(f"{path}/updated_main_df_1.csv", index_col=0)
     updated_supp_df_1 = pd.read_csv(f"{path}/updated_supp_df_1.csv", index_col=0)
-
-    updated_main_df_2 = pd.read_csv(f"{path}/updated_main_df_2.csv", index_col=0)
-    updated_supp_df_2 = pd.read_csv(f"{path}/updated_supp_df_2.csv", index_col=0)
-
     updated_profits_method_1 = calculate_profits(
         updated_main_df_1, updated_supp_df_1, gens_df, price_column="mcp"
     )
+
+    k_values_2 = pd.read_csv(f"{path}/k_values_2.csv", index_col=0)
+
+    updated_main_df_2 = pd.read_csv(f"{path}/updated_main_df_2.csv", index_col=0)
+    updated_supp_df_2 = pd.read_csv(f"{path}/updated_supp_df_2.csv", index_col=0)
     updated_profits_method_2 = calculate_profits(
         updated_main_df_2, updated_supp_df_2, gens_df, price_column="mcp"
     )
@@ -142,17 +183,17 @@ if __name__ == "__main__":
         [
             updated_profits_method_1[opt_gen],
             updated_profits_method_2[opt_gen],
-            profits_method_3[opt_gen],
+            # profits_method_3[opt_gen],
         ],
         axis=1,
     )
     profits.columns = [
         "Method 1 (after UC)",
         "Method 2 (after UC)",
-        "Method 3 (DRL)",
+        # "Method 3 (DRL)",
     ]
 
-    profits = profits/1e3
+    profits = profits / 1e3
 
     profits = profits.apply(pd.to_numeric, errors="coerce")
     fig = px.bar(
@@ -174,11 +215,11 @@ if __name__ == "__main__":
     )
 
     # add Method 3 (RL) bar
-    fig.add_bar(
-        x=["Method 3 (RL)"],
-        y=[profits["Method 3 (DRL)"].sum()],
-        name="Method 3 (DRL)",
-    )
+    # fig.add_bar(
+    #     x=["Method 3 (RL)"],
+    #     y=[profits["Method 3 (DRL)"].sum()],
+    #     name="Method 3 (DRL)",
+    # )
 
     # make all bares with Method 1 in name blue
     for i in range(len(fig.data)):
@@ -191,9 +232,9 @@ if __name__ == "__main__":
             fig.data[i].marker.color = "orange"
 
     # make all bares with Method 3 in name green
-    for i in range(len(fig.data)):
-        if "Method 3" in fig.data[i].name:
-            fig.data[i].marker.color = "green"
+    # for i in range(len(fig.data)):
+    #     if "Method 3" in fig.data[i].name:
+    #         fig.data[i].marker.color = "green"
 
     # display values on top of bars
     fig.update_traces(texttemplate="%{y:.0f}", textposition="outside")
@@ -205,7 +246,7 @@ if __name__ == "__main__":
     fig.update_layout(showlegend=False)
 
     # save plot as pdf
-    fig.write_image(f"outputs/{case}/profits_{opt_gen}.pdf")
+    # fig.write_image(f"{save_path}/profits_{opt_gen}.pdf")
 
     # save plot as html
     # fig.write_html(f"outputs/{case}/profits_{opt_gen}.html")
@@ -326,5 +367,20 @@ if __name__ == "__main__":
     fig.write_image(f"outputs/{case}/mcp.pdf")
     fig.show()
 
+    # %%
+    # plot merit order of all units with cumsum of g_max on x axis and mc on y axis
+    # Sort the DataFrame by marginal cost
+    sorted_gens_df = gens_df.sort_values("mc")
+
+    # Create a line plot
+    fig = px.line(
+        x=sorted_gens_df["g_max"].cumsum(),
+        y=sorted_gens_df["mc"],
+        title="Merit Order",
+        labels={"x": "Cumulative Capacity [MW]", "y": "Marginal Cost [€/MWh]"},
+    )
+
+    # Show the plot
+    fig.show()
 
 # %%
