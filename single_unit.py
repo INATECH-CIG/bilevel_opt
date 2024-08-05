@@ -11,14 +11,14 @@ from utils import calculate_profits, calculate_mc
 
 if __name__ == "__main__":
     case = "Case_2"
-    opt_gen = 42  # generator that is allowed to bid strategically
+    opt_gen = 35  # generator that is allowed to bid strategically
 
     k_max = 2  # maximum multiplier for strategic bidding
-    time_limit = 600 * 10  # time limit in seconds for each optimization
+    time_limit = 600*2  # time limit in seconds for each optimization
     K = 10
 
-    start = pd.to_datetime("2021-03-02 00:00")
-    end = pd.to_datetime("2021-03-02 12:00")
+    start = pd.to_datetime("2021-03-03 00:00")
+    end = pd.to_datetime("2021-03-03 12:00")
 
     # gens
     gens_df = pd.read_csv(f"inputs/{case}/gens.csv")
@@ -31,8 +31,8 @@ if __name__ == "__main__":
         2
     )
 
-    gens_df["k_up"] *= (gens_df["g_max"] * 2 / 3 / 10).round(2)
-    gens_df["k_down"] *= (gens_df["g_max"] * 1 / 3 / 10).round(2)
+    gens_df["k_up"] *= (gens_df["g_max"] * 2 / 3).round(2)
+    gens_df["k_down"] *= (gens_df["g_max"] * 1 / 3).round(2)
 
     # 24 hours of demand first increasing and then decreasing
     demand_df = pd.read_csv(f"inputs/{case}/demand.csv", index_col=0)
@@ -76,12 +76,12 @@ if __name__ == "__main__":
         os.makedirs(save_path)
 
     big_w_values = {
-        0: {"model_1": 1000, "model_2": 100},
-        42: {"model_1": 1000, "model_2": 1000},
+        0: {"model_1": 100, "model_2": 100},
+        opt_gen: {"model_1": 100, "model_2": 1000},
         25: {"model_1": 1000, "model_2": 1000},
     }
 
-    # big_w_values = 1000
+    # default_big_w_values = 1000
 
     # %%
     if optimize:
@@ -137,26 +137,29 @@ if __name__ == "__main__":
         print("Finished solving. All results saved to csv.")
 
     # %%
-    # load data
+    # load data for Method 1
     path = f"outputs/{case}/gen_{opt_gen}"
 
     k_values_1 = pd.read_csv(f"{path}/k_values_1.csv", index_col=0)
 
     updated_main_df_1 = pd.read_csv(f"{path}/updated_main_df_1.csv", index_col=0)
     updated_supp_df_1 = pd.read_csv(f"{path}/updated_supp_df_1.csv", index_col=0)
+    
     updated_profits_method_1 = calculate_profits(
         updated_main_df_1, updated_supp_df_1, gens_df, price_column="mcp"
     )
-
+    # %%
+    # load data for Method 2
     k_values_2 = pd.read_csv(f"{path}/k_values_2.csv", index_col=0)
 
     updated_main_df_2 = pd.read_csv(f"{path}/updated_main_df_2.csv", index_col=0)
     updated_supp_df_2 = pd.read_csv(f"{path}/updated_supp_df_2.csv", index_col=0)
+
     updated_profits_method_2 = calculate_profits(
         updated_main_df_2, updated_supp_df_2, gens_df, price_column="mcp"
     )
 
-    # %% RL Part
+    # %% load data for Method 3 (RL)
     market_orders = pd.read_csv(
         f"{path}/market_orders.csv",
         index_col=0,
