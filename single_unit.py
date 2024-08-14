@@ -11,28 +11,33 @@ from utils import calculate_profits, calculate_mc
 
 if __name__ == "__main__":
     case = "Case_2"
-    opt_gen = 35  # generator that is allowed to bid strategically
+    opt_gen = 61  # generator that is allowed to bid strategically
 
     k_max = 2  # maximum multiplier for strategic bidding
-    time_limit = 600*2  # time limit in seconds for each optimization
+    time_limit = 600 * 5  # time limit in seconds for each optimization
     K = 10
 
-    start = pd.to_datetime("2021-03-03 00:00")
-    end = pd.to_datetime("2021-03-03 12:00")
+    start = pd.to_datetime("2021-03-02 00:00")
+    end = pd.to_datetime("2021-03-02 23:00")
 
     # gens
     gens_df = pd.read_csv(f"inputs/{case}/gens.csv")
-    emission_factors = pd.read_csv(f"inputs/{case}/EmissionFactors.csv", index_col=0)
-    gens_df["ef"] = gens_df["fuel"].map(emission_factors["emissions"])
 
-    fuel_prices = pd.read_csv(f"inputs/{case}/fuel_prices.csv", index_col=0)
+    # calculate marginal costs and k_up and k_down when case is Case_2
+    if case == "Case_2":
+        emission_factors = pd.read_csv(
+            f"inputs/{case}/EmissionFactors.csv", index_col=0
+        )
+        gens_df["ef"] = gens_df["fuel"].map(emission_factors["emissions"])
 
-    gens_df["mc"] = gens_df.apply(calculate_mc, axis=1, fuel_prices=fuel_prices).round(
-        2
-    )
+        fuel_prices = pd.read_csv(f"inputs/{case}/fuel_prices.csv", index_col=0)
 
-    gens_df["k_up"] *= (gens_df["g_max"] * 2 / 3).round(2)
-    gens_df["k_down"] *= (gens_df["g_max"] * 1 / 3).round(2)
+        gens_df["mc"] = gens_df.apply(
+            calculate_mc, axis=1, fuel_prices=fuel_prices
+        ).round(2)
+
+        gens_df["k_up"] *= (gens_df["g_max"] * 2 / 3).round(2)
+        gens_df["k_down"] *= (gens_df["g_max"] * 1 / 3).round(2)
 
     # 24 hours of demand first increasing and then decreasing
     demand_df = pd.read_csv(f"inputs/{case}/demand.csv", index_col=0)
@@ -42,14 +47,16 @@ if __name__ == "__main__":
     demand_df = demand_df.resample("1h").mean()
     demand_df = demand_df.loc[start:end]
 
-    vre_gen = pd.read_csv(f"inputs/{case}/vre_gen.csv", index_col=0)
-    vre_gen.index = pd.to_datetime(vre_gen.index)
-    # resaple to 1 hour
-    vre_gen = vre_gen.resample("1h").mean()
-    vre_gen = vre_gen.loc[start:end]
+    # load vre generation when case is Case_2
+    if case == "Case_2":
+        vre_gen = pd.read_csv(f"inputs/{case}/vre_gen.csv", index_col=0)
+        vre_gen.index = pd.to_datetime(vre_gen.index)
+        # resaple to 1 hour
+        vre_gen = vre_gen.resample("1h").mean()
+        vre_gen = vre_gen.loc[start:end]
 
-    # subtract vre generation from demand
-    demand_df["volume"] -= vre_gen.sum(axis=1)
+        # subtract vre generation from demand
+        demand_df["volume"] -= vre_gen.sum(axis=1)
 
     # reset index to start at 0
     demand_df = demand_df.reset_index(drop=True)
@@ -57,13 +64,14 @@ if __name__ == "__main__":
     # active power plant
     active_pp = gens_df["g_max"].cumsum() <= demand_df["volume"].iloc[0]
 
-    # set g_0 as g_max for the first 60 power plants
+    # set g_0 as g_max to be able to cover first demand value
     gens_df["g_0"] = 0
     gens_df.loc[active_pp, "g_0"] = gens_df.loc[active_pp, "g_max"]
 
-    # set u_0 as 1 for the first 60 power plants
+    # set u_0 as 1 for the active power plant
     gens_df["u_0"] = 0
     gens_df.loc[active_pp, "u_0"] = 1
+    gens_df["u_0"].loc[opt_gen] = 1
 
     k_values_df = pd.DataFrame(columns=gens_df.index, index=demand_df.index, data=1.0)
 
@@ -144,7 +152,7 @@ if __name__ == "__main__":
 
     updated_main_df_1 = pd.read_csv(f"{path}/updated_main_df_1.csv", index_col=0)
     updated_supp_df_1 = pd.read_csv(f"{path}/updated_supp_df_1.csv", index_col=0)
-    
+
     updated_profits_method_1 = calculate_profits(
         updated_main_df_1, updated_supp_df_1, gens_df, price_column="mcp"
     )
@@ -218,11 +226,11 @@ if __name__ == "__main__":
     )
 
     # add Method 3 (RL) bar
-    # fig.add_bar(
-    #     x=["Method 3 (RL)"],
-    #     y=[profits["Method 3 (DRL)"].sum()],
-    #     name="Method 3 (DRL)",
-    # )
+    fig.add_bar(
+        x=["Method 3 (RL)"],
+        y=[profits["Method 3 (DRL)"].sum()],
+        name="Method 3 (DRL)",
+    )
 
     # make all bares with Method 1 in name blue
     for i in range(len(fig.data)):

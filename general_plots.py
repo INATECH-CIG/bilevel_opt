@@ -1,10 +1,10 @@
 # %%
-import os
+import plotly.express as px
+
 from uc_problem import solve_uc_problem
 from utils import calculate_profits
 
 import pandas as pd
-import plotly.express as px
 
 case = "Case_1"
 
@@ -20,8 +20,6 @@ demand_df.index = pd.to_datetime(demand_df.index)
 demand_df = demand_df.loc[start:end]
 # reset index to start at 0
 demand_df = demand_df.reset_index(drop=True)
-
-# demand_df["volume"] = demand_df["volume"] * 0.7
 
 font_size = 22
 # %% plot demand_df
@@ -216,7 +214,6 @@ all_profits["Unit"] = all_profits["Unit"].apply(lambda x: f"{x + 1}")
 df_long = all_profits.melt(id_vars="Unit", var_name="Method", value_name="Profit")
 
 # %%
-import plotly.express as px
 
 # Assuming df_long is already prepared
 # Create the bar plot
